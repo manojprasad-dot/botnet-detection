@@ -84,8 +84,8 @@ def render_command_center() -> str:
             }
 
             .brandmark-frame {
-                width: 330px;
-                height: 170px;
+                width: 270px;
+                height: 220px;
                 overflow: hidden;
                 border-radius: 26px;
                 border: 1px solid rgba(113, 151, 204, 0.2);
@@ -109,9 +109,8 @@ def render_command_center() -> str:
             .brandmark-frame img {
                 width: 100%;
                 height: 100%;
-                object-fit: cover;
-                object-position: 76% 13%;
-                transform: scale(1.02);
+                object-fit: contain;
+                padding: 14px;
                 filter: saturate(1.08) brightness(1.02);
             }
 
@@ -676,7 +675,7 @@ def render_command_center() -> str:
                     <div class="eyebrow"><span class="dot"></span>KOVIRX Threat Command Center</div>
                     <div class="brand-cluster">
                         <div class="brandmark-frame">
-                            <img src="/static/kovirx-logo-reference.png" alt="KOVIRX logo" />
+                            <img src="/static/brand/kovirx-horizontal-dark-clean.png" alt="KOVIRX logo" />
                         </div>
                         <div class="brand-copy">
                             <h1>Detect. Analyze. Defend.</h1>
