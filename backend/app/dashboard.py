@@ -75,6 +75,53 @@ def render_command_center() -> str:
                 gap: 8px;
             }
 
+            .brand-cluster {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                margin-bottom: 10px;
+                flex-wrap: wrap;
+            }
+
+            .brandmark-frame {
+                width: 330px;
+                height: 170px;
+                overflow: hidden;
+                border-radius: 26px;
+                border: 1px solid rgba(113, 151, 204, 0.2);
+                background:
+                    radial-gradient(circle at 30% 30%, rgba(125, 242, 212, 0.1), transparent 28%),
+                    rgba(8, 19, 36, 0.94);
+                box-shadow:
+                    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+                    0 22px 44px rgba(2, 10, 20, 0.45);
+                position: relative;
+            }
+
+            .brandmark-frame::after {
+                content: "";
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 46%);
+            }
+
+            .brandmark-frame img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                object-position: 76% 13%;
+                transform: scale(1.02);
+                filter: saturate(1.08) brightness(1.02);
+            }
+
+            .brand-copy {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                max-width: 360px;
+            }
+
             .eyebrow {
                 display: inline-flex;
                 width: fit-content;
@@ -599,6 +646,14 @@ def render_command_center() -> str:
                     flex-direction: column;
                 }
 
+                .brand-cluster {
+                    align-items: flex-start;
+                }
+
+                .brandmark-frame {
+                    width: min(100%, 360px);
+                }
+
                 .status-strip {
                     justify-content: flex-start;
                 }
@@ -619,12 +674,19 @@ def render_command_center() -> str:
             <div class="topbar">
                 <div class="brand">
                     <div class="eyebrow"><span class="dot"></span>KOVIRX Threat Command Center</div>
-                    <h1>Detect. Analyze. Defend.</h1>
-                    <p class="subtitle">
-                        Live tactical view of endpoint telemetry, botnet behavior, AI explanations,
-                        and network-wide threat spread. This screen turns your project into a security operations story,
-                        not just a list of logs.
-                    </p>
+                    <div class="brand-cluster">
+                        <div class="brandmark-frame">
+                            <img src="/static/kovirx-logo-reference.png" alt="KOVIRX logo" />
+                        </div>
+                        <div class="brand-copy">
+                            <h1>Detect. Analyze. Defend.</h1>
+                            <p class="subtitle">
+                                Live tactical view of endpoint telemetry, botnet behavior, AI explanations,
+                                and network-wide threat spread. This screen turns your project into a security operations story,
+                                not just a list of logs.
+                            </p>
+                        </div>
+                    </div>
                 </div>
                 <div id="status-strip" class="status-strip"></div>
             </div>

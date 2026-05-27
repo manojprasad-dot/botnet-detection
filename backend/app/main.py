@@ -1,9 +1,11 @@
+from pathlib import Path
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .dashboard import render_command_center
@@ -44,6 +46,7 @@ app = FastAPI(
     ),
     lifespan=lifespan,
 )
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 allowed_origins = ["*"] if settings.allowed_origins == "*" else settings.allowed_origins.split(",")
 app.add_middleware(
