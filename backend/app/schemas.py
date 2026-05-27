@@ -85,3 +85,52 @@ class PlatformSummary(BaseModel):
     alerts_by_severity: dict[str, int] = Field(default_factory=dict)
     events_by_type: dict[str, int] = Field(default_factory=dict)
     latest_alerts: list[Alert] = Field(default_factory=list)
+
+
+class DeviceCommandNode(BaseModel):
+    device_id: str
+    label: str
+    operating_system: str
+    status: str
+    risk_score: int = Field(ge=0, le=100)
+    health_score: int = Field(ge=0, le=100)
+    confidence_score: int = Field(ge=0, le=100)
+    last_seen_at: datetime
+    tags: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    latest_alert_title: str | None = None
+
+
+class ThreatTimelineEntry(BaseModel):
+    stage: str
+    title: str
+    device_id: str
+    occurred_at: datetime
+    severity: str
+    description: str
+
+
+class TrafficFeedEntry(BaseModel):
+    device_id: str
+    event_type: str
+    source: str
+    observed_at: datetime
+    summary: str
+
+
+class AIBrainSummary(BaseModel):
+    threat_level: str
+    confidence_score: int = Field(ge=0, le=100)
+    global_risk_score: int = Field(ge=0, le=100)
+    headline: str
+    explanations: list[str] = Field(default_factory=list)
+
+
+class CommandCenterSnapshot(BaseModel):
+    generated_at: datetime = Field(default_factory=utc_now)
+    summary: PlatformSummary
+    ai_brain: AIBrainSummary
+    nodes: list[DeviceCommandNode] = Field(default_factory=list)
+    alerts: list[Alert] = Field(default_factory=list)
+    timeline: list[ThreatTimelineEntry] = Field(default_factory=list)
+    traffic_feed: list[TrafficFeedEntry] = Field(default_factory=list)

@@ -9,6 +9,7 @@ This repository is a starter implementation of a cross-platform botnet traffic d
 - SQLite persistence for devices, telemetry, and alerts
 - Summary and telemetry APIs for dashboards or SOC views
 - Demo simulation mode for generating suspicious activity
+- Interactive "Threat Command Center" UI with network topology and AI explainability
 - Shared telemetry model aligned with endpoint-to-cloud workflows
 - Containerized local backend runtime
 - Architecture docs for future Android, Rust, Kafka, and Kubernetes evolution
@@ -62,7 +63,7 @@ The design is intentionally compatible with a later migration path:
 
 ```powershell
 cd "D:\botnet detection\backend"
-python -m venv .venv
+py -3.13 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -74,7 +75,7 @@ Open a second shell:
 
 ```powershell
 cd "D:\botnet detection\agent"
-python -m venv .venv
+py -3.13 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python -m agent.main --server http://127.0.0.1:8000 --once
@@ -94,6 +95,8 @@ python -m agent.main --server http://127.0.0.1:8000 --once
 
 Interactive docs are available at `http://127.0.0.1:8000/docs`.
 
+If dependency installation fails on Python 3.14 because of `pydantic-core` wheel availability, use Python 3.13 for the local environment.
+
 ### 4. Demo a Detection
 
 Once the backend is running, you can trigger realistic alerts from the agent without needing raw packet capture:
@@ -106,6 +109,7 @@ python -m agent.main --server http://127.0.0.1:8000 --once --simulate-botnet
 Then open:
 
 - `http://127.0.0.1:8000/dashboard`
+- `http://127.0.0.1:8000/api/v1/command-center`
 - `http://127.0.0.1:8000/api/v1/alerts`
 
 ## Docker Compose
