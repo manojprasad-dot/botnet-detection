@@ -1,37 +1,41 @@
 import math
 from collections import Counter
-from datetime import datetime, timezone
 from uuid import uuid4
 
 from .config import settings
-from .schemas import Alert, RegisteredDevice, Severity, TelemetryBatch
+from .schemas import Alert, PlatformSummary, RegisteredDevice, Severity, TelemetryBatch, TelemetryRecord
 from .store import store
 
 
 def register_device(device: RegisteredDevice) -> RegisteredDevice:
-    store.devices[device.device_id] = device
-    return device
+    return store.register_device(device)
+
+
+def get_device(device_id: str) -> RegisteredDevice | None:
+    return store.get_device(device_id)
 
 
 def list_devices() -> list[RegisteredDevice]:
-    return list(store.devices.values())
+    return store.list_devices()
 
 
-def list_alerts() -> list[Alert]:
-    return sorted(store.alerts, key=lambda alert: alert.created_at, reverse=True)
+def list_alerts(limit: int = 100, device_id: str | None = None) -> list[Alert]:
+    return store.list_alerts(limit=limit, device_id=device_id)
 
 
-def update_last_seen(device_id: str) -> None:
-    device = store.devices.get(device_id)
-    if device:
-        device.last_seen_at = datetime.now(timezone.utc)
+def list_telemetry(
+    limit: int = 100, device_id: str | None = None
+) -> list[TelemetryRecord]:
+    return store.list_telemetry(limit=limit, device_id=device_id)
+
+
+def get_platform_summary() -> PlatformSummary:
+    return store.get_summary()
 
 
 def ingest_telemetry(batch: TelemetryBatch) -> list[Alert]:
-    store.telemetry[batch.device_id].extend(batch.events)
-    update_last_seen(batch.device_id)
     alerts = detect_suspicious_activity(batch)
-    store.alerts.extend(alerts)
+    store.ingest_telemetry(batch, alerts)
     return alerts
 
 
@@ -74,6 +78,29 @@ def detect_suspicious_activity(batch: TelemetryBatch) -> list[Alert]:
                         ),
                         confidence_score=0.81,
                         evidence={"connection_count": connection_count},
+                    )
+                )
+
+        if event.event_type == "socket_snapshot":
+            unique_remote_ips = int(event.payload.get("unique_remote_ips", 0))
+            public_remote_ips = int(event.payload.get("public_remote_ips", 0))
+            if unique_remote_ips >= 25 or public_remote_ips >= 20:
+                alerts.append(
+                    Alert(
+                        alert_id=str(uuid4()),
+                        device_id=batch.device_id,
+                        severity=Severity.high,
+                        title="Suspicious remote endpoint fan-out",
+                        description=(
+                            "The endpoint is communicating with an unusually large "
+                            "number of remote addresses, which may indicate scanning "
+                            "activity, proxying, or botnet coordination."
+                        ),
+                        confidence_score=0.86,
+                        evidence={
+                            "unique_remote_ips": unique_remote_ips,
+                            "public_remote_ips": public_remote_ips,
+                        },
                     )
                 )
 

@@ -6,6 +6,9 @@ This repository is a starter implementation of a cross-platform botnet traffic d
 
 - Cross-platform Python endpoint agent skeleton
 - FastAPI cloud backend for device registration, telemetry ingestion, and alerts
+- SQLite persistence for devices, telemetry, and alerts
+- Summary and telemetry APIs for dashboards or SOC views
+- Demo simulation mode for generating suspicious activity
 - Shared telemetry model aligned with endpoint-to-cloud workflows
 - Containerized local backend runtime
 - Architecture docs for future Android, Rust, Kafka, and Kubernetes evolution
@@ -42,13 +45,13 @@ The MVP follows this flow:
 
 1. The endpoint agent gathers device metadata and lightweight telemetry.
 2. The agent sends telemetry to a central API over HTTPS-ready client logic.
-3. The backend performs simple detection and creates alerts.
+3. The backend persists telemetry, performs heuristic detection, and creates alerts.
 4. A future dashboard, stream processor, and ML services can consume the same contracts.
 
 The design is intentionally compatible with a later migration path:
 
 - Python agent -> Rust or Go agent
-- In-memory backend store -> PostgreSQL and Kafka
+- SQLite backend store -> PostgreSQL and Kafka
 - Heuristic detection -> XGBoost, Isolation Forest, sequence models
 - CLI/runtime ops -> Docker Compose, then Kubernetes
 - Desktop-only telemetry -> Windows ETW, Linux eBPF, macOS NetworkExtension, Android VPN telemetry
@@ -80,12 +83,30 @@ python -m agent.main --server http://127.0.0.1:8000 --once
 ### 3. API Endpoints
 
 - `GET /health`
+- `GET /dashboard`
 - `POST /api/v1/devices/register`
 - `GET /api/v1/devices`
+- `GET /api/v1/devices/{device_id}`
 - `POST /api/v1/telemetry/ingest`
+- `GET /api/v1/telemetry`
 - `GET /api/v1/alerts`
+- `GET /api/v1/summary`
 
 Interactive docs are available at `http://127.0.0.1:8000/docs`.
+
+### 4. Demo a Detection
+
+Once the backend is running, you can trigger realistic alerts from the agent without needing raw packet capture:
+
+```powershell
+cd "D:\botnet detection\agent"
+python -m agent.main --server http://127.0.0.1:8000 --once --simulate-botnet
+```
+
+Then open:
+
+- `http://127.0.0.1:8000/dashboard`
+- `http://127.0.0.1:8000/api/v1/alerts`
 
 ## Docker Compose
 
@@ -98,7 +119,7 @@ This starts the FastAPI backend locally. The agent is left as a separate process
 
 ## Recommended Next Steps
 
-1. Replace the in-memory backend store with PostgreSQL.
+1. Replace SQLite with PostgreSQL.
 2. Add JWT or mTLS-based device authentication.
 3. Split detection into ingestion, feature extraction, and alert services.
 4. Add OS-specific collectors for Windows, Linux, and macOS.
@@ -107,4 +128,4 @@ This starts the FastAPI backend locally. The agent is left as a separate process
 
 ## Notes
 
-This scaffold is intentionally realistic but lightweight. It gives you clean architecture boundaries without pretending the full enterprise feature set is already implemented.
+This repository now behaves like a small but usable platform prototype. It gives you persistence, telemetry history, and repeatable detection demos while still keeping the architecture light enough for a student project.

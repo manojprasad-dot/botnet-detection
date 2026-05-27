@@ -9,7 +9,10 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 8000
       ALLOWED_ORIGINS: "*"
+      DATABASE_PATH: data/platform.db
       ALERT_DNS_ENTROPY_THRESHOLD: 4.0
       ALERT_CONNECTION_THRESHOLD: 120
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/data:/app/data

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
     allowed_origins: str = Field(default="*", alias="ALLOWED_ORIGINS")
+    database_path: str = Field(default="data/platform.db", alias="DATABASE_PATH")
     alert_dns_entropy_threshold: float = Field(
         default=4.0, alias="ALERT_DNS_ENTROPY_THRESHOLD"
     )

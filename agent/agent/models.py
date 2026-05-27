@@ -9,6 +9,7 @@ def utc_now() -> datetime:
 
 
 class DeviceRegistration(BaseModel):
+    device_fingerprint: str
     hostname: str
     ip_address: str | None = None
     operating_system: str

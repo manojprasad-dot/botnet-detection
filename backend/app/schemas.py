@@ -26,6 +26,7 @@ class Severity(str, Enum):
 
 
 class DeviceRegistration(BaseModel):
+    device_fingerprint: str
     hostname: str
     ip_address: str | None = None
     operating_system: OperatingSystem = OperatingSystem.unknown
@@ -54,6 +55,12 @@ class TelemetryBatch(BaseModel):
     generated_at: datetime = Field(default_factory=utc_now)
 
 
+class TelemetryRecord(TelemetryEvent):
+    record_id: int
+    device_id: str
+    generated_at: datetime
+
+
 class Alert(BaseModel):
     alert_id: str
     device_id: str
@@ -69,3 +76,12 @@ class TelemetryIngestResponse(BaseModel):
     ingested_events: int
     generated_alerts: list[Alert] = Field(default_factory=list)
 
+
+class PlatformSummary(BaseModel):
+    total_devices: int
+    active_devices_24h: int
+    total_events: int
+    total_alerts: int
+    alerts_by_severity: dict[str, int] = Field(default_factory=dict)
+    events_by_type: dict[str, int] = Field(default_factory=dict)
+    latest_alerts: list[Alert] = Field(default_factory=list)
