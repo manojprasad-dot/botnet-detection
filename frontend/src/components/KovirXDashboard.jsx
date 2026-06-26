@@ -1,5 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import logoImg from "../assets/logo.jpg";
+import {
+  getDashboardSummary,
+  getAlerts,
+  getDevices,
+  updateAlertStatus,
+  logout,
+  getWebSocketUrl
+} from "../services/api";
 
 // ── Color Palette ──────────────────────────────────────────────
 const COLORS = {
@@ -100,6 +108,12 @@ function NetworkMesh({ threatLevel }) {
 
     const nodes = nodesRef.current;
 
+    // Adjust node states based on threatLevel dynamically
+    if (threatLevel === "critical" && nodes.length > 5) {
+      nodes[2].state = "critical";
+      nodes[5].state = "critical";
+    }
+
     // drift non-fixed nodes gently
     nodes.forEach(n => {
       if (n.fixed) return;
@@ -189,37 +203,7 @@ function NetworkMesh({ threatLevel }) {
   );
 }
 
-// ── Data ───────────────────────────────────────────────────────
-const TIMELINE = [
-  { time: "08:15", event: "DNS Anomaly Detected", type: "warning", detail: "Unusual query frequency from Node-047" },
-  { time: "08:16", event: "Beaconing Pattern", type: "warning", detail: "Periodic outbound requests on port 443" },
-  { time: "08:17", event: "C2 Communication", type: "critical", detail: "Command & Control server contact confirmed" },
-  { time: "08:18", event: "Threat Confirmed", type: "critical", detail: "Mirai variant botnet identified" },
-  { time: "08:22", event: "Isolation Triggered", type: "safe", detail: "Node quarantined by AI Core" },
-];
-
-const INCIDENTS = [
-  { label: "DDoS Amplification", severity: "Critical", src: "AS45899 — Vietnam", ago: "2m ago" },
-  { label: "Botnet Beacon Loop", severity: "High", src: "Node-047 — Internal", ago: "11m ago" },
-  { label: "Port Scan Sweep", severity: "Medium", src: "192.168.3.44", ago: "29m ago" },
-  { label: "Phishing DNS Redirect", severity: "Medium", src: "External Domain", ago: "1h ago" },
-  { label: "Patch Applied", severity: "Resolved", src: "Gateway-02", ago: "2h ago" },
-];
-
-const THREAT_DNA = [
-  { label: "C2 Beaconing", pct: 92, color: COLORS.red },
-  { label: "Port Scanning", pct: 74, color: COLORS.amber },
-  { label: "DNS Tunneling", pct: 61, color: COLORS.amber },
-  { label: "Lateral Movement", pct: 48, color: COLORS.purple },
-  { label: "Credential Harvest", pct: 33, color: COLORS.cyan },
-];
-
-const DEVICES = [
-  { name: "WKSTN-047", os: "Windows 11", risk: 83, net: 92, cpu: 35, status: "SUSPICIOUS" },
-  { name: "SRV-NGINX-01", os: "Ubuntu 22", risk: 12, net: 8, cpu: 61, status: "SAFE" },
-  { name: "IOT-CAM-003", os: "Embedded", risk: 97, net: 99, cpu: 78, status: "CRITICAL" },
-];
-
+// ── Replay Steps ───────────────────────────────────────────────
 const REPLAY_STEPS = [
   { ts: "08:15:03", label: "Device Connected", icon: "◉" },
   { ts: "08:15:47", label: "Suspicious DNS Query", icon: "⚠" },
@@ -234,6 +218,7 @@ function SeverityBadge({ sev }) {
     Critical: { bg: COLORS.red + "22", border: COLORS.red, text: COLORS.red },
     High: { bg: COLORS.amber + "22", border: COLORS.amber, text: COLORS.amber },
     Medium: { bg: "#9B59FF22", border: COLORS.purple, text: COLORS.purple },
+    Low: { bg: COLORS.cyan + "22", border: COLORS.cyan, text: COLORS.cyan },
     Resolved: { bg: COLORS.cyan + "22", border: COLORS.cyan, text: COLORS.cyan },
   };
   const s = map[sev] || map.Medium;
@@ -252,7 +237,7 @@ function StatCard({ label, value, delta, color }) {
       borderRadius: 8, padding: "10px 14px", flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 9, color: COLORS.textDim, fontFamily: "Orbitron, monospace",
         letterSpacing: 2, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontFamily: "Orbitron, monospace", fontWeight: 700, color: color || COLORS.cyan }}>
+      <div style={{ fontSize: 20, fontFamily: "Orbitron, monospace", fontWeight: 700, color: color || COLORS.cyan }}>
         {value}
       </div>
       {delta && <div style={{ fontSize: 9, color: COLORS.amber, marginTop: 2 }}>▲ {delta} / 24h</div>}
@@ -260,14 +245,158 @@ function StatCard({ label, value, delta, color }) {
   );
 }
 
+// Helper to format ISO dates into human readable hours
+const formatTime = (dateStr) => {
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch (e) {
+    return "00:00";
+  }
+};
+
+// Helper to format relative time
+const formatRelativeTime = (dateStr) => {
+  try {
+    const diffMs = new Date() - new Date(dateStr);
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return new Date(dateStr).toLocaleDateString();
+  } catch (e) {
+    return "recent";
+  }
+};
+
 // ── Main Dashboard ─────────────────────────────────────────────
 export default function KovirXDashboard() {
   const [threatLevel, setThreatLevel] = useState("high");
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [replaying, setReplaying] = useState(false);
   const [replayStep, setReplayStep] = useState(-1);
-  const [activeTab, setActiveTab] = useState("monitor");
   const [pulseCore, setPulseCore] = useState(false);
+
+  // Live State from Backend API
+  const [summary, setSummary] = useState({
+    protected_devices: 0,
+    active_threats: 0,
+    today_alerts: 0,
+    detection_accuracy: 0.0,
+    botnet_attempts_24h: 0,
+    traffic_stats: { total_flows: 0, suspicious_flows: 0, blocked_flows: 0 },
+    top_threat_types: []
+  });
+  const [alerts, setAlerts] = useState([]);
+  const [devices, setDevices] = useState([]);
+  const [wsConnected, setWsConnected] = useState(false);
+
+  // Fetch all dashboard data
+  const loadDashboardData = async () => {
+    try {
+      const [sumData, alertsData, devicesData] = await Promise.all([
+        getDashboardSummary(),
+        getAlerts(),
+        getDevices(),
+      ]);
+      setSummary(sumData);
+      setAlerts(alertsData);
+      setDevices(devicesData);
+    } catch (err) {
+      console.error("Error loading dashboard data:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  // Set threat level based on active alerts severity
+  useEffect(() => {
+    if (alerts.some(a => a.status === 'new' && a.severity.toLowerCase() === 'critical')) {
+      setThreatLevel("critical");
+    } else if (alerts.some(a => a.status === 'new' && a.severity.toLowerCase() === 'high')) {
+      setThreatLevel("high");
+    } else if (alerts.some(a => a.status === 'new' && a.severity.toLowerCase() === 'medium')) {
+      setThreatLevel("warning");
+    } else {
+      setThreatLevel("safe");
+    }
+  }, [alerts]);
+
+  // WebSocket Live Stream Listener
+  useEffect(() => {
+    let ws = null;
+    let reconnectTimeout = null;
+    let isMounted = true;
+
+    const connectWS = () => {
+      const wsUrl = getWebSocketUrl();
+      if (!wsUrl) return;
+
+      console.log("Connecting WebSocket to alert stream:", wsUrl);
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        if (isMounted) setWsConnected(true);
+        console.log("WebSocket connected.");
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          console.log("WebSocket broadcast received:", payload);
+          if (payload.channel === "alerts" && payload.event === "new") {
+            const newAlert = payload.data;
+            if (isMounted) {
+              setAlerts((prev) => [newAlert, ...prev]);
+              setPulseCore(true);
+              setTimeout(() => setPulseCore(false), 800);
+              setSummary((prev) => ({
+                ...prev,
+                today_alerts: (prev.today_alerts || 0) + 1,
+                active_threats: (prev.active_threats || 0) + 1,
+              }));
+            }
+          } else if (payload.channel === "traffic" && payload.event === "ingested") {
+            if (isMounted) {
+              setSummary((prev) => ({
+                ...prev,
+                traffic_stats: {
+                  ...prev.traffic_stats,
+                  total_flows: (prev.traffic_stats?.total_flows || 0) + (payload.data.flow_count || 0),
+                }
+              }));
+            }
+          }
+        } catch (err) {
+          console.error("Error parsing WS payload:", err);
+        }
+      };
+
+      ws.onclose = () => {
+        if (isMounted) {
+          setWsConnected(false);
+          console.log("WebSocket connection closed. Reconnecting in 3s...");
+          reconnectTimeout = setTimeout(connectWS, 3000);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error("WebSocket encountered an error:", err);
+        ws.close();
+      };
+    };
+
+    connectWS();
+
+    return () => {
+      isMounted = false;
+      if (ws) ws.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, []);
 
   // Replay animation
   useEffect(() => {
@@ -278,23 +407,25 @@ export default function KovirXDashboard() {
     const iv = setInterval(() => {
       i++;
       setReplayStep(i);
-      if (i >= steps - 1) { clearInterval(iv); setTimeout(() => { setReplaying(false); setReplayStep(-1); }, 1800); }
+      if (i >= steps - 1) {
+        clearInterval(iv);
+        setTimeout(() => {
+          setReplaying(false);
+          setReplayStep(-1);
+        }, 1800);
+      }
     }, 900);
     return () => clearInterval(iv);
   }, [replaying]);
 
   // Random core pulse
   useEffect(() => {
-    const iv = setInterval(() => { setPulseCore(true); setTimeout(() => setPulseCore(false), 600); }, 4000);
+    const iv = setInterval(() => {
+      setPulseCore(true);
+      setTimeout(() => setPulseCore(false), 600);
+    }, 5000);
     return () => clearInterval(iv);
   }, []);
-
-  const navItems = [
-    { id: "monitor", icon: "⬡", label: "NEXUS" },
-    { id: "threats", icon: "⚠", label: "THREATS" },
-    { id: "devices", icon: "◫", label: "DEVICES" },
-    { id: "replay", icon: "▶", label: "REPLAY" },
-  ];
 
   return (
     <div style={{ background: COLORS.bg, minHeight: "100vh", color: COLORS.text,
@@ -342,55 +473,79 @@ export default function KovirXDashboard() {
           </div>
         </div>
 
-        {/* NAV LINKS */}
-        <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 16px" }}>
-          {navItems.map(n => (
-            <button key={n.id} onClick={() => setActiveTab(n.id)} style={{
-              background: activeTab === n.id ? "#00D4FF11" : "none",
-              border: "none", cursor: "pointer", padding: "6px 14px", height: "100%",
-              fontFamily: "Orbitron, monospace", fontSize: 10, letterSpacing: 2, fontWeight: 700,
-              color: activeTab === n.id ? COLORS.cyan : COLORS.textDim,
-              borderBottom: activeTab === n.id ? `2px solid ${COLORS.cyan}` : "2px solid transparent",
-              borderRadius: "4px 4px 0 0", transition: "all 0.2s",
-            }}>
-              {n.icon} {n.label}
-            </button>
-          ))}
+        {/* NAV STATUS */}
+        <div style={{ display: "flex", alignItems: "center", padding: "0 24px", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: "50%",
+              background: wsConnected ? COLORS.safe : COLORS.red,
+              boxShadow: `0 0 8px ${wsConnected ? COLORS.safe : COLORS.red}`,
+              animation: wsConnected ? "none" : "threatBlink 1.2s infinite"
+            }} />
+            <span style={{ fontSize: 9, fontFamily: "Orbitron, monospace", color: wsConnected ? COLORS.safe : COLORS.red, letterSpacing: 2, fontWeight: 700 }}>
+              {wsConnected ? "NEXUS ONLINE" : "NEXUS OFFLINE"}
+            </span>
+          </div>
         </div>
 
         <div style={{ flex: 1 }} />
 
         {/* RIGHT STATUS */}
-        <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "0 24px",
-          borderLeft: `1px solid ${COLORS.panelBorder}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS.red,
-              boxShadow: `0 0 8px ${COLORS.red}`, flexShrink: 0,
-              animation: "threatBlink 1.2s infinite" }} />
+        <div style={{ display: "flex", alignItems: "stretch", borderLeft: `1px solid ${COLORS.panelBorder}` }}>
+          {/* System Level */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 24px", borderRight: `1px solid ${COLORS.panelBorder}` }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%",
+              background: threatLevel === 'critical' || threatLevel === 'high' ? COLORS.red : COLORS.safe,
+              boxShadow: `0 0 8px ${threatLevel === 'critical' || threatLevel === 'high' ? COLORS.red : COLORS.safe}`, flexShrink: 0,
+              animation: threatLevel === 'critical' || threatLevel === 'high' ? "threatBlink 1.2s infinite" : "none" }} />
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              <span style={{ fontSize: 9, fontFamily: "Orbitron, monospace", color: COLORS.red,
-                letterSpacing: 2, fontWeight: 700 }}>LIVE THREAT</span>
+              <span style={{ fontSize: 9, fontFamily: "Orbitron, monospace",
+                color: threatLevel === 'critical' || threatLevel === 'high' ? COLORS.red : COLORS.safe,
+                letterSpacing: 2, fontWeight: 700 }}>SYSTEM LEVEL</span>
               <span style={{ fontSize: 8, color: COLORS.textDim, fontFamily: "Orbitron, monospace",
-                letterSpacing: 1 }}>MIRAI VARIANT ACTIVE</span>
+                letterSpacing: 1 }}>{threatLevel.toUpperCase()}</span>
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
-            <span style={{ fontSize: 12, fontFamily: "Orbitron, monospace", color: COLORS.text, letterSpacing: 1 }}>
-              {new Date().toLocaleTimeString("en-US", { hour12: false })}
-            </span>
-            <span style={{ fontSize: 8, color: COLORS.textDim, fontFamily: "Orbitron, monospace", letterSpacing: 2 }}>UTC · LIVE</span>
+
+          {/* Time & Logout */}
+          <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "0 24px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
+              <span style={{ fontSize: 12, fontFamily: "Orbitron, monospace", color: COLORS.text, letterSpacing: 1 }}>
+                {new Date().toLocaleTimeString("en-US", { hour12: false })}
+              </span>
+              <span style={{ fontSize: 8, color: COLORS.textDim, fontFamily: "Orbitron, monospace", letterSpacing: 2 }}>UTC · LIVE</span>
+            </div>
+
+            <button onClick={logout} style={{
+              background: 'rgba(255, 53, 94, 0.1)',
+              border: `1px solid ${COLORS.red}`,
+              color: COLORS.red,
+              padding: '6px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontFamily: 'Orbitron, monospace',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '1.5px',
+              transition: 'all 0.2s',
+            }}
+            onMouseOver={(e) => e.target.style.background = 'rgba(255, 53, 94, 0.25)'}
+            onMouseOut={(e) => e.target.style.background = 'rgba(255, 53, 94, 0.1)'}
+            >
+              LOGOUT
+            </button>
           </div>
         </div>
       </div>
 
       {/* STAT BAR */}
       <div style={{ display: "flex", gap: 8, padding: "8px 16px", flexShrink: 0 }}>
-        <StatCard label="THREAT ACTORS" value="20" delta="9" />
-        <StatCard label="ACTIVE INDICATORS" value="430K" delta="307K" color={COLORS.amber} />
-        <StatCard label="MALWARE TRACKED" value="6.62K" delta="2053" color={COLORS.red} />
-        <StatCard label="AI CONFIDENCE" value="98%" color={COLORS.purple} />
-        <StatCard label="NODES MONITORED" value="2,847" color={COLORS.cyan} />
-        <StatCard label="SYSTEM HEALTH" value="98.7%" color={COLORS.safe} />
+        <StatCard label="ACTIVE THREATS" value={summary.active_threats} />
+        <StatCard label="TOTAL FLOWS" value={summary.traffic_stats?.total_flows?.toLocaleString() || "0"} color={COLORS.amber} />
+        <StatCard label="SUSPICIOUS FLOWS" value={summary.traffic_stats?.suspicious_flows?.toLocaleString() || "0"} color={COLORS.red} />
+        <StatCard label="AI ACCURACY" value={`${(summary.detection_accuracy * 100).toFixed(1)}%`} color={COLORS.purple} />
+        <StatCard label="NODES MONITORED" value={summary.protected_devices?.toLocaleString() || "0"} color={COLORS.cyan} />
+        <StatCard label="TODAY'S ALERTS" value={summary.today_alerts} color={COLORS.safe} />
       </div>
 
       {/* MAIN BODY */}
@@ -401,39 +556,43 @@ export default function KovirXDashboard() {
 
           {/* Threat Timeline */}
           <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.panelBorder}`,
-            borderRadius: 10, padding: "12px 14px", flex: 1, overflow: "hidden" }}>
+            borderRadius: 10, padding: "12px 14px", flex: 1, display: 'flex', flexDirection: 'column', overflow: "hidden" }}>
             <div style={{ fontSize: 9, fontFamily: "Orbitron, monospace", color: COLORS.textDim,
               letterSpacing: 2, marginBottom: 10 }}>THREAT TIMELINE</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              {TIMELINE.map((item, i) => (
-                <div key={i} style={{ display: "flex", gap: 10, position: "relative",
-                  animation: `slideIn 0.4s ease ${i * 0.1}s both` }}>
-                  {/* connector */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 16 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                      background: item.type === "critical" ? COLORS.red :
-                                  item.type === "warning" ? COLORS.amber : COLORS.cyan,
-                      border: `2px solid ${COLORS.panel}`,
-                      boxShadow: `0 0 8px ${item.type === "critical" ? COLORS.red :
-                                  item.type === "warning" ? COLORS.amber : COLORS.cyan}` }} />
-                    {i < TIMELINE.length - 1 && (
-                      <div style={{ width: 1, flex: 1, minHeight: 24,
-                        background: `linear-gradient(${COLORS.panelBorder}, transparent)` }} />
-                    )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, overflowY: 'auto', flex: 1 }}>
+              {alerts && alerts.length > 0 ? (
+                alerts.slice(0, 8).map((item, i) => (
+                  <div key={item.id || i} style={{ display: "flex", gap: 10, position: "relative",
+                    animation: `slideIn 0.4s ease ${i * 0.1}s both` }}>
+                    {/* connector */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 16 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                        background: item.severity === "critical" ? COLORS.red :
+                                    item.severity === "high" ? COLORS.amber : COLORS.cyan,
+                        border: `2px solid ${COLORS.panel}`,
+                        boxShadow: `0 0 8px ${item.severity === "critical" ? COLORS.red :
+                                    item.severity === "high" ? COLORS.amber : COLORS.cyan}` }} />
+                      {i < alerts.slice(0, 8).length - 1 && (
+                        <div style={{ width: 1, flex: 1, minHeight: 24,
+                          background: `linear-gradient(${COLORS.panelBorder}, transparent)` }} />
+                      )}
+                    </div>
+                    <div style={{ paddingBottom: 14, flex: 1 }}>
+                      <div style={{ fontSize: 9, color: COLORS.textDim, fontFamily: "Orbitron, monospace" }}>
+                        {formatTime(item.created_at)}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.text, marginTop: 1 }}>
+                        {item.title}
+                      </div>
+                      <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2, lineHeight: 1.4 }}>
+                        {item.description}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ paddingBottom: 14, flex: 1 }}>
-                    <div style={{ fontSize: 9, color: COLORS.textDim, fontFamily: "Orbitron, monospace" }}>
-                      {item.time}
-                    </div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.text, marginTop: 1 }}>
-                      {item.event}
-                    </div>
-                    <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 2, lineHeight: 1.4 }}>
-                      {item.detail}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div style={{ fontSize: 10, color: COLORS.textDim }}>No timeline events recorded.</div>
+              )}
             </div>
           </div>
 
@@ -443,20 +602,30 @@ export default function KovirXDashboard() {
             <div style={{ fontSize: 9, fontFamily: "Orbitron, monospace", color: COLORS.textDim,
               letterSpacing: 2, marginBottom: 8 }}>THREAT DNA</div>
             <div style={{ fontSize: 10, color: COLORS.red, fontFamily: "Orbitron, monospace",
-              marginBottom: 8, fontWeight: 700 }}>FAMILY: MIRAI VARIANT</div>
-            {THREAT_DNA.map((d, i) => (
-              <div key={i} style={{ marginBottom: 7 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                  <span style={{ fontSize: 10, color: COLORS.text }}>{d.label}</span>
-                  <span style={{ fontSize: 10, color: d.color, fontFamily: "Orbitron, monospace" }}>{d.pct}%</span>
-                </div>
-                <div style={{ height: 4, background: COLORS.panelBorder, borderRadius: 2 }}>
-                  <div style={{ height: "100%", width: `${d.pct}%`, background: d.color,
-                    borderRadius: 2, boxShadow: `0 0 6px ${d.color}88`,
-                    transition: "width 1s ease" }} />
-                </div>
-              </div>
-            ))}
+              marginBottom: 8, fontWeight: 700 }}>REAL-TIME CLASSIFICATIONS</div>
+            {summary.top_threat_types && summary.top_threat_types.length > 0 ? (
+              summary.top_threat_types.map((d, i) => {
+                const total = summary.top_threat_types.reduce((acc, curr) => acc + curr.count, 0) || 1;
+                const pct = Math.round((d.count / total) * 100);
+                const colors = [COLORS.red, COLORS.amber, COLORS.purple, COLORS.cyan];
+                const color = colors[i % colors.length];
+                return (
+                  <div key={i} style={{ marginBottom: 7 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                      <span style={{ fontSize: 10, color: COLORS.text }}>{d.threat_type}</span>
+                      <span style={{ fontSize: 10, color: color, fontFamily: "Orbitron, monospace" }}>{d.count} ({pct}%)</span>
+                    </div>
+                    <div style={{ height: 4, background: COLORS.panelBorder, borderRadius: 2 }}>
+                      <div style={{ height: "100%", width: `${pct}%`, background: color,
+                        borderRadius: 2, boxShadow: `0 0 6px ${color}88`,
+                        transition: "width 1s ease" }} />
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div style={{ fontSize: 10, color: COLORS.textDim }}>No active malware profiles.</div>
+            )}
           </div>
         </div>
 
@@ -493,7 +662,7 @@ export default function KovirXDashboard() {
               transform: "translateX(-50%)", textAlign: "center", zIndex: 2,
               pointerEvents: "none" }}>
               <div style={{ fontFamily: "Orbitron, monospace", fontSize: 8,
-                color: COLORS.purple, letterSpacing: 3 }}>AI CORE — 98% CONFIDENCE</div>
+                color: COLORS.purple, letterSpacing: 3 }}>AI CORE — XGBOOST & ISOLATION FOREST ACTIVE</div>
             </div>
           </div>
 
@@ -502,7 +671,7 @@ export default function KovirXDashboard() {
             borderRadius: 10, padding: "12px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ fontSize: 9, fontFamily: "Orbitron, monospace", color: COLORS.textDim, letterSpacing: 2 }}>
-                THREAT REPLAY — WKSTN-047
+                THREAT REPLAY — MITRE ATT&CK SIMULATION
               </div>
               <button onClick={() => setReplaying(true)}
                 disabled={replaying}
@@ -571,89 +740,162 @@ export default function KovirXDashboard() {
                 display: "flex", flexDirection: "column", alignItems: "center",
                 justifyContent: "center" }}>
                 <div style={{ fontFamily: "Orbitron, monospace", fontSize: 18,
-                  fontWeight: 900, color: COLORS.purple }}>98%</div>
-                <div style={{ fontSize: 7, color: COLORS.textDim, letterSpacing: 1 }}>CONFIDENCE</div>
+                  fontWeight: 900, color: COLORS.purple }}>{(summary.detection_accuracy * 100).toFixed(0)}%</div>
+                <div style={{ fontSize: 7, color: COLORS.textDim, letterSpacing: 1 }}>ACCURACY</div>
               </div>
             </div>
             <div style={{ marginTop: 12, display: "flex", justifyContent: "center", gap: 6 }}>
-              {[["LOW", COLORS.cyan], ["MED", COLORS.amber], ["HIGH", COLORS.red]].map(([l, c]) => (
-                <div key={l} style={{ padding: "2px 8px", borderRadius: 3,
-                  background: l === "HIGH" ? c + "33" : "transparent",
-                  border: `1px solid ${l === "HIGH" ? c : COLORS.panelBorder}`,
-                  fontSize: 8, fontFamily: "Orbitron, monospace", color: l === "HIGH" ? c : COLORS.textDim,
-                  letterSpacing: 1 }}>
-                  {l}
-                </div>
-              ))}
+              {["LOW", "MED", "HIGH"].map((l) => {
+                const active = (l === "HIGH" && threatLevel === "critical") || (l === "MED" && threatLevel === "warning") || (l === "LOW" && threatLevel === "safe") || (l === "HIGH" && threatLevel === "high");
+                const col = l === "HIGH" ? COLORS.red : l === "MED" ? COLORS.amber : COLORS.cyan;
+                return (
+                  <div key={l} style={{ padding: "2px 8px", borderRadius: 3,
+                    background: active ? col + "33" : "transparent",
+                    border: `1px solid ${active ? col : COLORS.panelBorder}`,
+                    fontSize: 8, fontFamily: "Orbitron, monospace", color: active ? col : COLORS.textDim,
+                    letterSpacing: 1 }}>
+                    {l}
+                  </div>
+                );
+              })}
             </div>
-            <div style={{ marginTop: 8, fontSize: 9, color: COLORS.red,
-              fontFamily: "Orbitron, monospace", animation: "threatBlink 1.5s infinite" }}>
-              ⬡ ACTIVE THREAT DETECTED
+            <div style={{ marginTop: 8, fontSize: 9, color: threatLevel === 'safe' ? COLORS.safe : COLORS.red,
+              fontFamily: "Orbitron, monospace", animation: threatLevel === 'safe' ? "none" : "threatBlink 1.5s infinite" }}>
+              {threatLevel === 'safe' ? "⬡ NETWORK SECURE" : "⬡ ACTIVE THREATS DETECTED"}
             </div>
           </div>
 
           {/* Recent Incidents */}
           <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.panelBorder}`,
-            borderRadius: 10, padding: "12px 14px", flex: 1, overflow: "auto" }}>
+            borderRadius: 10, padding: "12px 14px", flex: 1, display: 'flex', flexDirection: 'column', overflow: "hidden" }}>
             <div style={{ fontSize: 9, fontFamily: "Orbitron, monospace", color: COLORS.textDim,
               letterSpacing: 2, marginBottom: 10 }}>SECURITY INCIDENTS</div>
-            {INCIDENTS.map((inc, i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", gap: 3,
-                padding: "8px 0", borderBottom: i < INCIDENTS.length - 1 ? `1px solid ${COLORS.panelBorder}` : "none" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 11, fontWeight: 600 }}>{inc.label}</span>
-                  <SeverityBadge sev={inc.severity} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 10, color: COLORS.textDim }}>{inc.src}</span>
-                  <span style={{ fontSize: 10, color: COLORS.textDim }}>{inc.ago}</span>
-                </div>
-              </div>
-            ))}
+            <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
+              {alerts && alerts.length > 0 ? (
+                alerts.map((inc, i) => {
+                  const severityWord = inc.severity.charAt(0).toUpperCase() + inc.severity.slice(1).toLowerCase();
+                  return (
+                    <div key={inc.id || i} style={{ display: "flex", flexDirection: "column", gap: 3,
+                      padding: "8px 0", borderBottom: i < alerts.length - 1 ? `1px solid ${COLORS.panelBorder}` : "none" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 11, fontWeight: 600 }}>{inc.title}</span>
+                        <SeverityBadge sev={severityWord} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 10, color: COLORS.textDim }}>{inc.evidence?.source_ip || "System Core"}</span>
+                        <span style={{ fontSize: 10, color: COLORS.textDim }}>{formatRelativeTime(inc.created_at)}</span>
+                      </div>
+                      {inc.status === "new" && (
+                        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await updateAlertStatus(inc.id, "investigating");
+                                loadDashboardData();
+                              } catch (err) {
+                                console.error(err);
+                              }
+                            }}
+                            style={{
+                              background: 'none',
+                              border: `1px solid ${COLORS.amber}`,
+                              borderRadius: '3px',
+                              color: COLORS.amber,
+                              fontSize: '8px',
+                              padding: '2px 6px',
+                              cursor: 'pointer',
+                              fontFamily: 'Orbitron, monospace',
+                            }}
+                          >
+                            INVESTIGATE
+                          </button>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await updateAlertStatus(inc.id, "resolved");
+                                loadDashboardData();
+                              } catch (err) {
+                                console.error(err);
+                              }
+                            }}
+                            style={{
+                              background: 'none',
+                              border: `1px solid ${COLORS.safe}`,
+                              borderRadius: '3px',
+                              color: COLORS.safe,
+                              fontSize: '8px',
+                              padding: '2px 6px',
+                              cursor: 'pointer',
+                              fontFamily: 'Orbitron, monospace',
+                            }}
+                          >
+                            RESOLVE
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ fontSize: 10, color: COLORS.textDim, padding: "10px 0" }}>No security incidents.</div>
+              )}
+            </div>
           </div>
 
           {/* Device Cards */}
           <div style={{ background: COLORS.panel, border: `1px solid ${COLORS.panelBorder}`,
-            borderRadius: 10, padding: "12px 14px" }}>
+            borderRadius: 10, padding: "12px 14px", maxHeight: '280px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ fontSize: 9, fontFamily: "Orbitron, monospace", color: COLORS.textDim,
               letterSpacing: 2, marginBottom: 8 }}>DEVICE INTELLIGENCE</div>
-            {DEVICES.map((d, i) => (
-              <div key={i} onClick={() => setSelectedDevice(selectedDevice?.name === d.name ? null : d)}
-                style={{ padding: "8px 10px", borderRadius: 7, marginBottom: 6, cursor: "pointer",
-                  background: selectedDevice?.name === d.name ? COLORS.panelBorder : "transparent",
-                  border: `1px solid ${d.status === "CRITICAL" ? COLORS.red + "55" :
-                            d.status === "SUSPICIOUS" ? COLORS.amber + "55" : COLORS.panelBorder}`,
-                  transition: "all 0.2s" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <div>
-                    <div style={{ fontFamily: "Orbitron, monospace", fontSize: 10,
-                      fontWeight: 700, color: COLORS.text }}>{d.name}</div>
-                    <div style={{ fontSize: 9, color: COLORS.textDim }}>{d.os}</div>
-                  </div>
-                  <span style={{ fontSize: 9, fontFamily: "Orbitron, monospace", fontWeight: 700,
-                    color: d.status === "CRITICAL" ? COLORS.red : d.status === "SUSPICIOUS" ? COLORS.amber : COLORS.cyan,
-                    animation: d.status === "CRITICAL" ? "threatBlink 1.2s infinite" : "none" }}>
-                    {d.status}
-                  </span>
-                </div>
-
-                {selectedDevice?.name === d.name && (
-                  <div style={{ marginTop: 6, animation: "slideIn 0.3s ease" }}>
-                    {[["Risk Score", d.risk, COLORS.red], ["Network Score", d.net, COLORS.amber], ["CPU Usage", d.cpu, COLORS.cyan]].map(([lbl, val, col]) => (
-                      <div key={lbl} style={{ marginBottom: 5 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                          <span style={{ fontSize: 9, color: COLORS.textDim }}>{lbl}</span>
-                          <span style={{ fontSize: 9, fontFamily: "Orbitron, monospace", color: col }}>{val}%</span>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {devices && devices.length > 0 ? (
+                devices.map((d, i) => {
+                  const riskScore = Math.round(d.risk_score);
+                  // Calculate dynamic network/cpu mock values or extract from device tags
+                  const isSuspicious = riskScore > 35;
+                  const isCritical = riskScore > 75;
+                  return (
+                    <div key={d.id || i} onClick={() => setSelectedDevice(selectedDevice?.id === d.id ? null : d)}
+                      style={{ padding: "8px 10px", borderRadius: 7, marginBottom: 6, cursor: "pointer",
+                        background: selectedDevice?.id === d.id ? COLORS.panelBorder : "transparent",
+                        border: `1px solid ${isCritical ? COLORS.red + "55" :
+                                  isSuspicious ? COLORS.amber + "55" : COLORS.panelBorder}`,
+                        transition: "all 0.2s" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <div>
+                          <div style={{ fontFamily: "Orbitron, monospace", fontSize: 10,
+                            fontWeight: 700, color: COLORS.text }}>{d.hostname}</div>
+                          <div style={{ fontSize: 9, color: COLORS.textDim }}>{d.operating_system}</div>
                         </div>
-                        <div style={{ height: 3, background: COLORS.bg, borderRadius: 2 }}>
-                          <div style={{ height: "100%", width: `${val}%`, background: col, borderRadius: 2 }} />
-                        </div>
+                        <span style={{ fontSize: 9, fontFamily: "Orbitron, monospace", fontWeight: 700,
+                          color: isCritical ? COLORS.red : isSuspicious ? COLORS.amber : COLORS.cyan,
+                          animation: isCritical ? "threatBlink 1.2s infinite" : "none" }}>
+                          {isCritical ? "CRITICAL" : isSuspicious ? "SUSPICIOUS" : "SAFE"}
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+
+                      {selectedDevice?.id === d.id && (
+                        <div style={{ marginTop: 6, animation: "slideIn 0.3s ease" }}>
+                          {[["Risk Score", riskScore, COLORS.red], ["Network Score", isCritical ? 95 : isSuspicious ? 68 : 12, COLORS.amber], ["CPU Usage", isCritical ? 88 : 34, COLORS.cyan]].map(([lbl, val, col]) => (
+                            <div key={lbl} style={{ marginBottom: 5 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                                <span style={{ fontSize: 9, color: COLORS.textDim }}>{lbl}</span>
+                                <span style={{ fontSize: 9, fontFamily: "Orbitron, monospace", color: col }}>{val}%</span>
+                              </div>
+                              <div style={{ height: 3, background: COLORS.bg, borderRadius: 2 }}>
+                                <div style={{ height: "100%", width: `${val}%`, background: col, borderRadius: 2 }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ fontSize: 10, color: COLORS.textDim }}>No connected nodes.</div>
+              )}
+            </div>
           </div>
         </div>
       </div>
