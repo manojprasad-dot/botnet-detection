@@ -1,1 +1,0 @@
-# KOVIRX WebSocket package.

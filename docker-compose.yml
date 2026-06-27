@@ -35,7 +35,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: docker/Dockerfile
     container_name: kovirx_backend
     restart: always
@@ -50,6 +50,7 @@ services:
       - API_PORT=8000
       - ALLOWED_ORIGINS=*
       - DEBUG=False
+      - PYTHONPATH=/app
     ports:
       - "8000:8000"
     depends_on:
@@ -60,10 +61,10 @@ services:
 
   celery_worker:
     build:
-      context: ./backend
+      context: .
       dockerfile: docker/Dockerfile
     container_name: kovirx_celery
-    command: celery -A app.core.celery_app worker --loglevel=info
+    command: celery -A backend.core.celery_app worker --loglevel=info
     restart: always
     environment:
       - DATABASE_URL=postgresql+asyncpg://kovirx:${DB_PASSWORD:-kovirx}@postgres:5432/kovirx
@@ -72,6 +73,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production-use-long-random-string}
       - JWT_ALGORITHM=HS256
+      - PYTHONPATH=/app
     depends_on:
       postgres:
         condition: service_healthy

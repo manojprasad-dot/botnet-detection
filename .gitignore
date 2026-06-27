@@ -27,3 +27,7 @@ repo_upstream/
 *.njsproj
 *.sln
 *.sw?
+
+# Large datasets
+*.zip
+

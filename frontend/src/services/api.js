@@ -6,16 +6,22 @@
 
 // Dynamically determine the backend base API URL
 const getBaseUrl = () => {
-  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  const backendUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL;
   if (backendUrl) {
-    // Remove trailing slash if present
-    return `${backendUrl.replace(/\/$/, '')}/api/v1`;
+    const cleanUrl = backendUrl.replace(/\/$/, '');
+    if (cleanUrl.endsWith('/api/v1')) {
+      return cleanUrl;
+    }
+    return `${cleanUrl}/api/v1`;
   }
   // Fallback to local Vite dev server proxy path
   return '/api/v1';
 };
 
 const BASE_URL = getBaseUrl();
+
+console.log("VITE_API_URL:", import.meta.env.VITE_API_URL);
+console.log("BASE_URL:", BASE_URL);
 
 /**
  * Retrieve stored JWT token from local storage.
@@ -161,9 +167,9 @@ export function getWebSocketUrl() {
   const token = getToken();
   if (!token) return null;
 
-  let backendUrl = import.meta.env.VITE_BACKEND_URL;
+  let backendUrl = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL;
   if (!backendUrl) {
-    // If VITE_BACKEND_URL is not set, we are running in local dev mode.
+    // If VITE_BACKEND_URL/VITE_API_URL is not set, we are running in local dev mode.
     // The Vite proxy doesn't proxy websockets by default unless configured.
     // Connect directly to the local backend port 8000:
     backendUrl = 'http://localhost:8000';
@@ -175,3 +181,99 @@ export function getWebSocketUrl() {
   
   return `${wsProto}://${cleanUrl}/ws/live?token=${encodeURIComponent(token)}`;
 }
+
+/**
+ * Register a new device.
+ */
+export async function registerDevice(data) {
+  return fetchWithAuth('/devices/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Update an existing device.
+ */
+export async function updateDevice(deviceId, data) {
+  return fetchWithAuth(`/devices/${deviceId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Delete a device.
+ */
+export async function deleteDevice(deviceId) {
+  return fetchWithAuth(`/devices/${deviceId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Assign alert to a user.
+ */
+export async function assignAlert(alertId, assignedTo) {
+  return fetchWithAuth(`/alerts/${alertId}/assign`, {
+    method: 'POST',
+    body: JSON.stringify({ assigned_to: assignedTo }),
+  });
+}
+
+/**
+ * Trigger background report generation.
+ */
+export async function generateReport(reportType, format) {
+  return fetchWithAuth('/reports/generate', {
+    method: 'POST',
+    body: JSON.stringify({ report_type: reportType, format }),
+  });
+}
+
+/**
+ * Get all reports.
+ */
+export async function getReports() {
+  return fetchWithAuth('/reports');
+}
+
+/**
+ * Download a generated report as a binary blob.
+ */
+export async function downloadReport(reportId) {
+  const token = getToken();
+  const headers = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const response = await fetch(`${BASE_URL}/reports/${reportId}/download`, {
+    headers,
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to download report');
+  }
+  return await response.blob();
+}
+
+/**
+ * Get system logs.
+ */
+export async function getSystemLogs(level = null, module = null, skip = 0, limit = 50) {
+  let query = `?skip=${skip}&limit=${limit}`;
+  if (level) query += `&level=${level}`;
+  if (module) query += `&module=${module}`;
+  return fetchWithAuth(`/logs/system${query}`);
+}
+
+/**
+ * Get audit logs.
+ */
+export async function getAuditLogs(userId = null, action = null, skip = 0, limit = 50) {
+  let query = `?skip=${skip}&limit=${limit}`;
+  if (userId) query += `&user_id=${userId}`;
+  if (action) query += `&action=${action}`;
+  return fetchWithAuth(`/logs/audit${query}`);
+}
+
