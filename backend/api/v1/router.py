@@ -16,12 +16,14 @@ from backend.api.v1.ml import router as ml_router
 from backend.api.v1.reports import router as reports_router
 from backend.api.v1.threats import router as threats_router
 from backend.api.v1.traffic import router as traffic_router
+from backend.api.v1.telemetry import router as telemetry_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
 api_v1_router.include_router(auth_router)
 api_v1_router.include_router(devices_router)
 api_v1_router.include_router(traffic_router)
+api_v1_router.include_router(telemetry_router)
 api_v1_router.include_router(features_router)
 api_v1_router.include_router(ml_router)
 api_v1_router.include_router(threats_router)

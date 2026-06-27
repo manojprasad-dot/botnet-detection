@@ -86,7 +86,7 @@ const NODE_COLORS = {
 };
 
 // ── Network Mesh Canvas Component ────────────────────────────────────────
-function NetworkMesh({ threatLevel }) {
+function NetworkMesh({ threatLevel, devices = [] }) {
   const canvasRef = useRef(null);
   const nodesRef = useRef([]);
   const timeRef = useRef(0);
@@ -100,35 +100,68 @@ function NetworkMesh({ threatLevel }) {
     canvas.height = H;
 
     const cx = W / 2, cy = H / 2;
-    const nodes = [{ x: cx, y: cy, r: 18, state: "monitoring", pulse: 0, fixed: true, label: "AI CORE" }];
+    const nodes = [{ x: cx, y: cy, r: 18, state: "monitoring", pulse: 0, fixed: true, label: "AI CORE", deviceId: "core" }];
 
-    const rings = [
-      { count: 6, radius: 80, states: ["safe", "safe", "warning", "safe", "monitoring", "safe"] },
-      { count: 8, radius: 150, states: ["safe", "warning", "critical", "safe", "safe", "warning", "safe", "safe"] },
-      { count: 10, radius: 220, states: ["safe", "safe", "safe", "warning", "safe", "critical", "safe", "safe", "safe", "monitoring"] },
-    ];
+    // Render registered devices dynamically around the center AI CORE
+    if (devices && devices.length > 0) {
+      devices.forEach((device, index) => {
+        const count = devices.length;
+        const angle = (index / count) * Math.PI * 2 - Math.PI / 2;
+        const radius = count <= 4 ? 100 : count <= 8 ? 160 : 210;
 
-    rings.forEach(ring => {
-      for (let i = 0; i < ring.count; i++) {
-        const angle = (i / ring.count) * Math.PI * 2 - Math.PI / 2;
+        let state = "safe";
+        if (device.status === "quarantined" || device.risk_score >= 85) {
+          state = "critical";
+        } else if (device.risk_score >= 35) {
+          state = "warning";
+        } else if (device.status === "online") {
+          state = "monitoring";
+        }
+
         nodes.push({
-          x: cx + Math.cos(angle) * ring.radius,
-          y: cy + Math.sin(angle) * ring.radius,
-          r: ring.radius === 80 ? 10 : ring.radius === 150 ? 8 : 7,
-          state: ring.states[i],
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius,
+          r: 10,
+          state: state,
           pulse: Math.random() * Math.PI * 2,
           fixed: false,
-          label: null,
+          label: device.hostname,
+          deviceId: device.id,
           vx: (Math.random() - 0.5) * 0.15,
           vy: (Math.random() - 0.5) * 0.15,
-          ox: cx + Math.cos(angle) * ring.radius,
-          oy: cy + Math.sin(angle) * ring.radius,
+          ox: cx + Math.cos(angle) * radius,
+          oy: cy + Math.sin(angle) * radius,
         });
-      }
-    });
+      });
+    } else {
+      // Fallback static rings if no devices are registered
+      const rings = [
+        { count: 4, radius: 90, states: ["safe", "monitoring", "safe", "safe"] },
+        { count: 6, radius: 170, states: ["safe", "warning", "safe", "safe", "warning", "safe"] },
+      ];
+      rings.forEach(ring => {
+        for (let i = 0; i < ring.count; i++) {
+          const angle = (i / ring.count) * Math.PI * 2 - Math.PI / 2;
+          nodes.push({
+            x: cx + Math.cos(angle) * ring.radius,
+            y: cy + Math.sin(angle) * ring.radius,
+            r: 8,
+            state: ring.states[i],
+            pulse: Math.random() * Math.PI * 2,
+            fixed: false,
+            label: `Sensor-${ring.radius}-${i}`,
+            deviceId: `fallback-${ring.radius}-${i}`,
+            vx: (Math.random() - 0.5) * 0.15,
+            vy: (Math.random() - 0.5) * 0.15,
+            ox: cx + Math.cos(angle) * ring.radius,
+            oy: cy + Math.sin(angle) * ring.radius,
+          });
+        }
+      });
+    }
 
     nodesRef.current = nodes;
-  }, []);
+  }, [devices]);
 
   useEffect(() => {
     let frameId;
@@ -147,16 +180,6 @@ function NetworkMesh({ threatLevel }) {
       ctx.clearRect(0, 0, W, H);
       const nodes = nodesRef.current;
 
-      // Adjust node states based on threatLevel dynamically
-      if (threatLevel === "critical" && nodes.length > 5) {
-        nodes[2].state = "critical";
-        nodes[5].state = "critical";
-      } else if (threatLevel === "safe" && nodes.length > 5) {
-        nodes.forEach((n, idx) => {
-          if (!n.fixed) n.state = "safe";
-        });
-      }
-
       // drift non-fixed nodes gently
       nodes.forEach(n => {
         if (n.fixed) return;
@@ -167,35 +190,37 @@ function NetworkMesh({ threatLevel }) {
         if (dist > 18) { n.vx -= dx * 0.002; n.vy -= dy * 0.002; }
       });
 
-      // Draw edges
-      nodes.forEach((a, i) => {
-        nodes.forEach((b, j) => {
-          if (j <= i) return;
-          const dx = a.x - b.x, dy = a.y - b.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist > 180) return;
-          const alpha = (1 - dist / 180) * 0.18;
-          const isActive = (a.state === "critical" || b.state === "critical") ? true :
-            (a.state === "warning" || b.state === "warning");
-          const edgeColor = isActive ? COLORS.amber : COLORS.cyan;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.strokeStyle = edgeColor + Math.floor(alpha * 255).toString(16).padStart(2, "0");
-          ctx.lineWidth = isActive ? 0.8 : 0.5;
-          ctx.stroke();
+      // Draw edges connecting all active sensor nodes to the center AI Core
+      nodes.forEach((a) => {
+        if (a.deviceId === "core") return;
+        const b = nodes[0]; // center core
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const alpha = 0.35;
+        const isActive = a.state === "critical" || a.state === "warning";
+        const edgeColor = a.state === "critical" ? COLORS.red : isActive ? COLORS.amber : COLORS.cyan;
+        
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = edgeColor + Math.floor(alpha * 255).toString(16).padStart(2, "0");
+        ctx.lineWidth = isActive ? 1.2 : 0.6;
+        ctx.stroke();
 
-          // Traveling packet on some edges
-          if (dist < 130 && Math.sin(t * 1.5 + i * 0.7 + j * 0.4) > 0.82) {
-            const progress = (Math.sin(t * 2 + i + j) * 0.5 + 0.5);
-            const px = a.x + (b.x - a.x) * progress;
-            const py = a.y + (b.y - a.y) * progress;
-            ctx.beginPath();
-            ctx.arc(px, py, 2, 0, Math.PI * 2);
-            ctx.fillStyle = edgeColor;
-            ctx.fill();
-          }
-        });
+        // Animated traveling telemetry packets on connection line
+        const packetCycles = isActive ? 1.8 : 1.0;
+        if (Math.sin(t * packetCycles + a.pulse) > 0.4) {
+          const progress = (t * 0.4 + a.pulse) % 1.0;
+          const px = a.x + (b.x - a.x) * progress;
+          const py = a.y + (b.y - a.y) * progress;
+          ctx.beginPath();
+          ctx.arc(px, py, isActive ? 3 : 2, 0, Math.PI * 2);
+          ctx.fillStyle = edgeColor;
+          ctx.shadowBlur = isActive ? 6 : 0;
+          ctx.shadowColor = edgeColor;
+          ctx.fill();
+          ctx.shadowBlur = 0; // reset
+        }
       });
 
       // Draw nodes
@@ -227,6 +252,14 @@ function NetworkMesh({ threatLevel }) {
         ctx.arc(n.x, n.y, n.r * 0.35, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
+
+        // Text label
+        if (n.label) {
+          ctx.font = "bold 8px Orbitron, sans-serif";
+          ctx.fillStyle = COLORS.text;
+          ctx.textAlign = "center";
+          ctx.fillText(n.label, n.x, n.y - n.r - 8);
+        }
 
         // AI Core rotating rings
         if (n.fixed) {
@@ -922,7 +955,7 @@ export default function KovirXDashboard() {
                     </div>
 
                     <div className="flex-1 w-full relative">
-                      <NetworkMesh threatLevel={threatLevel} />
+                      <NetworkMesh threatLevel={threatLevel} devices={devices} />
                     </div>
 
                     <div className="absolute bottom-5 left-1/2 transform -translate-x-1/2 z-10 text-center pointer-events-none">
