@@ -157,5 +157,42 @@ async def websocket_live(websocket: WebSocket, token: str | None = Query(None)):
         ws_manager.disconnect(websocket)
 
 
+# WebSocket Agent Endpoint — bidirectional communication with agents
+@app.websocket("/ws/agent")
+async def websocket_agent(websocket: WebSocket, token: str | None = Query(None)):
+    """
+    WebSocket endpoint for endpoint agent connections.
+    Receives agent status and pushes commands (block_ip, sync_ioc, etc.).
+    """
+    from backend.api.agent_ws.handler import agent_ws_manager
+
+    if not token:
+        await websocket.close(code=1008)
+        return
+
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await websocket.close(code=1008)
+            return
+    except Exception:
+        await websocket.close(code=1008)
+        return
+
+    # Extract device_id from query or use user_id
+    device_id = websocket.query_params.get("device_id", payload.get("sub", "unknown"))
+    await agent_ws_manager.connect(websocket, device_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Agent can send status updates; log them
+            logger.debug("Agent %s message: %s", device_id, data[:200])
+    except WebSocketDisconnect:
+        agent_ws_manager.disconnect(device_id)
+    except Exception as e:
+        logger.error("Agent WebSocket error: %s", e)
+        agent_ws_manager.disconnect(device_id)
+
+
 # Register API v1 routes
 app.include_router(api_v1_router)

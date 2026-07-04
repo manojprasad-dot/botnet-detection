@@ -277,3 +277,83 @@ export async function getAuditLogs(userId = null, action = null, skip = 0, limit
   return fetchWithAuth(`/logs/audit${query}`);
 }
 
+
+// ── Risk Engine APIs ────────────────────────────────────────────
+
+/**
+ * Calculate multi-source risk score for a telemetry event.
+ */
+export async function calculateRisk(payload) {
+  return fetchWithAuth('/risk/calculate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Get device risk history for trend chart.
+ */
+export async function getDeviceRiskHistory(deviceId, days = 7) {
+  return fetchWithAuth(`/risk/device/${deviceId}/history?days=${days}`);
+}
+
+
+// ── Behavior Analysis APIs ──────────────────────────────────────
+
+/**
+ * Get network-wide behavior analysis overview.
+ */
+export async function getBehaviorOverview(hours = 24) {
+  return fetchWithAuth(`/behavior/overview?hours=${hours}`);
+}
+
+/**
+ * Get behavior analysis for a specific device.
+ */
+export async function getDeviceBehavior(deviceId, hours = 24) {
+  return fetchWithAuth(`/behavior/device/${deviceId}?hours=${hours}`);
+}
+
+
+// ── Agent Management APIs ───────────────────────────────────────
+
+/**
+ * Send a command to endpoint agent(s).
+ */
+export async function sendAgentCommand(command, target = null, deviceId = null, payload = {}) {
+  return fetchWithAuth('/agent/command', {
+    method: 'POST',
+    body: JSON.stringify({
+      device_id: deviceId,
+      command,
+      target,
+      payload,
+    }),
+  });
+}
+
+/**
+ * Get latest agent version info.
+ */
+export async function getAgentVersion() {
+  return fetchWithAuth('/agent/version');
+}
+
+/**
+ * List active agent WebSocket connections.
+ */
+export async function getAgentConnections() {
+  return fetchWithAuth('/agent/connections');
+}
+
+
+// ── Heartbeat API ───────────────────────────────────────────────
+
+/**
+ * Get device heartbeat status (used by the dashboard health widget).
+ */
+export async function getDeviceHeartbeats(deviceId) {
+  // This endpoint would be added for querying heartbeat history
+  return fetchWithAuth(`/devices/${deviceId}`);
+}
+

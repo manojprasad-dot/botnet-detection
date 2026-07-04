@@ -1,0 +1,25 @@
+# ── KOVIRX Endpoint Agent Dependencies ────────────────────────────
+
+# Core
+pydantic>=2.0,<3.0
+pydantic-settings>=2.0,<3.0
+requests>=2.31,<3.0
+psutil>=5.9,<6.0
+
+# Packet Capture
+scapy>=2.5,<3.0
+
+# ML Inference
+numpy>=1.24,<2.0
+joblib>=1.3,<2.0
+scikit-learn>=1.3,<2.0
+xgboost>=1.7,<3.0
+
+# WebSocket
+websocket-client>=1.6,<2.0
+
+# Optional: Encryption (AES-256-GCM)
+cryptography>=41.0,<43.0
+
+# Optional: SHAP Explainability
+# shap>=0.42,<1.0

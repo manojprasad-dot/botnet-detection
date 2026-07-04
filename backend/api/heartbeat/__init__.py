@@ -1,0 +1,1 @@
+# KOVIRX — Heartbeat API Domain
