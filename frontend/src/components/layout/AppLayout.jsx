@@ -8,6 +8,8 @@ import {
   logout,
   getWebSocketUrl,
   getCurrentUser,
+  getRefreshToken,
+  setTokens,
 } from "../../services/api";
 import {
   LayoutDashboard,
@@ -20,15 +22,11 @@ import {
   WifiOff,
   CheckCircle,
   AlertTriangle,
+  User,
+  ShieldCheck,
+  Settings,
+  Users,
 } from "lucide-react";
-
-const COLORS = {
-  cyan: "#00D4FF",
-  amber: "#FFB400",
-  red: "#FF355E",
-  purple: "#9B59FF",
-  safe: "#00E676",
-};
 
 export default function AppLayout() {
   const navigate = useNavigate();
@@ -53,10 +51,10 @@ export default function AppLayout() {
       setSummary(sum);
       setThreatLevel(sum.active_threats > 0 ? "critical" : "safe");
 
-      const al = await getAlerts(null, null, null, 0, 50);
-      setAlerts(al.alerts || []);
+      const al = await getAlerts();
+      setAlerts(al || []);
 
-      const dev = await getDevices(0, 100);
+      const dev = await getDevices();
       setDevices(dev.devices || []);
     } catch (err) {
       console.error("Dashboard reload failed:", err);
@@ -71,9 +69,10 @@ export default function AppLayout() {
     loadDashboardData();
 
     let ws;
-    const connectWS = () => {
+    const connectWS = async () => {
       try {
         const wsUrl = getWebSocketUrl();
+        if (!wsUrl) return;
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
@@ -88,8 +87,27 @@ export default function AppLayout() {
           }
         };
 
-        ws.onclose = () => {
+        ws.onclose = async () => {
           setWsConnected(false);
+          // Silent Token Refresh on close before reconnecting
+          const refreshToken = getRefreshToken();
+          if (refreshToken) {
+            try {
+              const cleanUrl = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || "").replace(/\/$/, '');
+              const base = cleanUrl.endsWith('/api/v1') ? cleanUrl : `${cleanUrl}/api/v1`;
+              const refreshRes = await fetch(`${base}/auth/refresh`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh_token: refreshToken }),
+              });
+              if (refreshRes.ok) {
+                const refreshData = await refreshRes.json();
+                setTokens(refreshData.access_token, refreshData.refresh_token);
+              }
+            } catch (err) {
+              console.error("WS token refresh failed:", err);
+            }
+          }
           setTimeout(connectWS, 5000);
         };
       } catch (err) {
@@ -107,6 +125,8 @@ export default function AppLayout() {
     logout();
     navigate("/login");
   };
+
+  const isSuperAdmin = currentUser?.role === "super_admin";
 
   return (
     <div className="w-screen h-screen bg-[#060B18] text-[#C5D0E6] font-sans flex overflow-hidden">
@@ -134,81 +154,152 @@ export default function AppLayout() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="p-4 space-y-1">
-            <NavLink
-              to="/"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
-                  isActive
-                    ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
-                    : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
-                }`
-              }
-            >
-              <LayoutDashboard className="h-4.5 w-4.5 text-[#00D4FF]" />
-              DASHBOARD
-            </NavLink>
+          <nav className="p-4 space-y-4 max-h-[calc(100vh-230px)] overflow-y-auto">
+            {/* Operations Section */}
+            <div className="space-y-1">
+              <span className="font-orbitron text-[8px] font-black tracking-widest text-[#5A7090] px-4 block uppercase mb-2">
+                OPERATIONS
+              </span>
+              <NavLink
+                to="/"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
+                      : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
+                  }`
+                }
+              >
+                <LayoutDashboard className="h-4.5 w-4.5 text-[#00D4FF]" />
+                DASHBOARD
+              </NavLink>
 
-            <NavLink
-              to="/alerts"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
-                  isActive
-                    ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
-                    : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
-                }`
-              }
-            >
-              <ShieldAlert className="h-4.5 w-4.5 text-[#FF355E]" />
-              INCIDENTS
-              {alerts.filter((a) => a.status === "new").length > 0 && (
-                <span className="ml-auto bg-[#FF355E] text-white text-[9px] font-bold px-2 py-0.5 rounded-full font-orbitron">
-                  {alerts.filter((a) => a.status === "new").length}
-                </span>
+              <NavLink
+                to="/alerts"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
+                      : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
+                  }`
+                }
+              >
+                <ShieldAlert className="h-4.5 w-4.5 text-[#FF355E]" />
+                INCIDENTS
+                {alerts.filter((a) => a.status === "new").length > 0 && (
+                  <span className="ml-auto bg-[#FF355E] text-white text-[9px] font-bold px-2 py-0.5 rounded-full font-orbitron">
+                    {alerts.filter((a) => a.status === "new").length}
+                  </span>
+                )}
+              </NavLink>
+
+              <NavLink
+                to="/devices"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
+                      : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
+                  }`
+                }
+              >
+                <Laptop className="h-4.5 w-4.5 text-[#9B59FF]" />
+                ENDPOINTS
+              </NavLink>
+
+              <NavLink
+                to="/reports"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
+                      : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
+                  }`
+                }
+              >
+                <FileText className="h-4.5 w-4.5 text-[#FFB400]" />
+                REPORTS
+              </NavLink>
+
+              <NavLink
+                to="/logs"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
+                      : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
+                  }`
+                }
+              >
+                <Terminal className="h-4.5 w-4.5 text-[#00E676]" />
+                AUDIT LOGS
+              </NavLink>
+            </div>
+
+            {/* Security Section */}
+            <div className="space-y-1 pt-2">
+              <span className="font-orbitron text-[8px] font-black tracking-widest text-[#5A7090] px-4 block uppercase mb-2">
+                SECURITY & IDENTITY
+              </span>
+
+              <NavLink
+                to="/profile"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
+                      : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
+                  }`
+                }
+              >
+                <User className="h-4.5 w-4.5 text-[#9B59FF]" />
+                MY PROFILE
+              </NavLink>
+
+              <NavLink
+                to="/sessions"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
+                      : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
+                  }`
+                }
+              >
+                <ShieldCheck className="h-4.5 w-4.5 text-[#00D4FF]" />
+                ACTIVE SESSIONS
+              </NavLink>
+
+              <NavLink
+                to="/security"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
+                      : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
+                  }`
+                }
+              >
+                <Settings className="h-4.5 w-4.5 text-[#FFB400]" />
+                ACCESS SETTINGS
+              </NavLink>
+
+              {isSuperAdmin && (
+                <NavLink
+                  to="/users"
+                  className={({ isActive }) =>
+                    `w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
+                      isActive
+                        ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
+                        : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
+                    }`
+                  }
+                >
+                  <Users className="h-4.5 w-4.5 text-[#00E676]" />
+                  USER MANAGEMENT
+                </NavLink>
               )}
-            </NavLink>
-
-            <NavLink
-              to="/devices"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
-                  isActive
-                    ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
-                    : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
-                }`
-              }
-            >
-              <Laptop className="h-4.5 w-4.5 text-[#9B59FF]" />
-              ENDPOINTS
-            </NavLink>
-
-            <NavLink
-              to="/reports"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
-                  isActive
-                    ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
-                    : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
-                }`
-              }
-            >
-              <FileText className="h-4.5 w-4.5 text-[#FFB400]" />
-              REPORTS
-            </NavLink>
-
-            <NavLink
-              to="/logs"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-orbitron font-semibold tracking-wider transition-all duration-200 ${
-                  isActive
-                    ? "bg-gradient-to-r from-[#9B59FF]/20 to-[#00D4FF]/20 border-l-2 border-[#00D4FF] text-white"
-                    : "text-[#5A7090] hover:text-white hover:bg-[#1E293B]/40 border-l-2 border-transparent"
-                }`
-              }
-            >
-              <Terminal className="h-4.5 w-4.5 text-[#00E676]" />
-              AUDIT LOGS
-            </NavLink>
+            </div>
           </nav>
         </div>
 

@@ -56,15 +56,8 @@ async def lifespan(app: FastAPI):
             result = await session.execute(select(User).limit(1))
             if not result.scalar():
                 logger.info("No users found in database. Seeding initial super-admin...")
-                admin = User(
-                    email=settings.first_superadmin_email,
-                    username="admin",
-                    hashed_password=hash_password(settings.first_superadmin_password),
-                    role=UserRole.super_admin,
-                    is_active=True,
-                )
-                session.add(admin)
-                await session.commit()
+                from backend.services.auth_service import seed_superadmin
+                await seed_superadmin(session, settings.first_superadmin_email, settings.first_superadmin_password)
                 logger.info("Initial super-admin seeded successfully.")
             else:
                 logger.info("Database users exist. Skipping super-admin seeding.")

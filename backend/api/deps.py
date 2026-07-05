@@ -57,14 +57,24 @@ async def get_current_user(
 def require_role(*roles: str):
     """
     Dependency factory for role-based access control.
-
-    Usage:
-        @router.get("/admin", dependencies=[Depends(require_role("super_admin"))])
+    Supports backward-compatible role mapping.
     """
+    resolved_roles = set(roles)
+    if "security_analyst" in resolved_roles:
+        resolved_roles.add("soc_analyst")
+    if "viewer" in resolved_roles:
+        resolved_roles.add("read_only")
+
     async def _check_role(
         current_user: User = Depends(get_current_user),
     ) -> User:
-        if current_user.role.value not in roles:
+        user_role = current_user.role.value
+        if user_role == "security_analyst":
+            user_role = "soc_analyst"
+        elif user_role == "viewer":
+            user_role = "read_only"
+
+        if user_role not in resolved_roles and current_user.role.value not in resolved_roles:
             raise PermissionDeniedException(
                 f"Role '{current_user.role.value}' does not have access. "
                 f"Required: {', '.join(roles)}"
@@ -76,6 +86,9 @@ def require_role(*roles: str):
 
 # Convenience dependencies for common role combinations
 require_admin = require_role("super_admin")
-require_analyst = require_role("super_admin", "security_analyst")
+require_analyst = require_role("super_admin", "soc_analyst", "security_analyst", "incident_responder")
 require_manager = require_role("super_admin", "soc_manager")
-require_any_auth = require_role("super_admin", "security_analyst", "soc_manager", "viewer")
+require_any_auth = require_role(
+    "super_admin", "soc_manager", "soc_analyst", "incident_responder", "read_only",
+    "security_analyst", "viewer"
+)

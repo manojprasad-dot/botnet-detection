@@ -6,7 +6,13 @@ import Incidents from "./pages/Incidents";
 import Endpoints from "./pages/Endpoints";
 import Reports from "./pages/Reports";
 import Logs from "./pages/Logs";
+import Profile from "./pages/Profile";
+import SecuritySettings from "./pages/SecuritySettings";
+import ActiveSessions from "./pages/ActiveSessions";
+import UserManagement from "./pages/UserManagement";
 import Login from "./components/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import { isAuthenticated } from "./services/api";
 
 function PrivateRoute({ children }) {
@@ -43,6 +49,10 @@ function App() {
           <Route path="devices" element={<Endpoints />} />
           <Route path="reports" element={<Reports />} />
           <Route path="logs" element={<Logs />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="security" element={<SecuritySettings />} />
+          <Route path="sessions" element={<ActiveSessions />} />
+          <Route path="users" element={<UserManagement />} />
         </Route>
         <Route
           path="/login"
@@ -50,6 +60,8 @@ function App() {
             authenticated ? <Navigate to="/" replace /> : <Login />
           }
         />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -23,31 +23,25 @@ const BASE_URL = getBaseUrl();
 console.log("VITE_API_URL:", import.meta.env.VITE_API_URL);
 console.log("BASE_URL:", BASE_URL);
 
-/**
- * Retrieve stored JWT token from local storage.
- */
 export const getToken = () => {
   return localStorage.getItem('kovirx_access_token');
 };
 
-/**
- * Save JWT token to local storage.
- */
-export const setToken = (token) => {
-  localStorage.setItem('kovirx_access_token', token);
+export const getRefreshToken = () => {
+  return localStorage.getItem('kovirx_refresh_token');
 };
 
-/**
- * Clear JWT token and log user out.
- */
+export const setTokens = (accessToken, refreshToken) => {
+  localStorage.setItem('kovirx_access_token', accessToken);
+  localStorage.setItem('kovirx_refresh_token', refreshToken);
+};
+
 export const logout = () => {
   localStorage.removeItem('kovirx_access_token');
+  localStorage.removeItem('kovirx_refresh_token');
   window.dispatchEvent(new Event('auth_change'));
 };
 
-/**
- * Helper to check if user has token.
- */
 export const isAuthenticated = () => {
   return !!getToken();
 };
@@ -77,9 +71,43 @@ export async function fetchWithAuth(endpoint, options = {}) {
     });
 
     if (response.status === 401) {
-      // Token is invalid/expired
-      logout();
-      throw new Error('Authentication expired. Please log in again.');
+      // Access token might be expired. Try to refresh.
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        logout();
+        throw new Error('Authentication expired. Please log in again.');
+      }
+
+      try {
+        const refreshRes = await fetch(`${BASE_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+
+        if (!refreshRes.ok) {
+          throw new Error('Refresh failed');
+        }
+
+        const refreshData = await refreshRes.json();
+        setTokens(refreshData.access_token, refreshData.refresh_token);
+        
+        // Retry the original request
+        headers['Authorization'] = `Bearer ${refreshData.access_token}`;
+        const retryRes = await fetch(url, {
+          ...options,
+          headers,
+        });
+
+        if (!retryRes.ok) {
+          const errorData = await retryRes.json().catch(() => ({}));
+          throw new Error(errorData.detail || `Request failed with status ${retryRes.status}`);
+        }
+        return await retryRes.json();
+      } catch (err) {
+        logout();
+        throw new Error('Session expired. Please log in again.');
+      }
     }
 
     if (!response.ok) {
@@ -111,7 +139,7 @@ export async function login(email, password) {
 
   const data = await response.json();
   if (data.access_token) {
-    setToken(data.access_token);
+    setTokens(data.access_token, data.refresh_token);
     window.dispatchEvent(new Event('auth_change'));
     return data;
   }
@@ -369,4 +397,79 @@ export async function getDeviceHeartbeats(deviceId) {
   // This endpoint would be added for querying heartbeat history
   return fetchWithAuth(`/devices/${deviceId}`);
 }
+
+// ── Enterprise Authentication APIs ─────────────────────────────────
+
+export async function forgotPassword(email) {
+  return fetchWithAuth('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(token, newPassword) {
+  return fetchWithAuth('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  return fetchWithAuth('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+}
+
+export async function updateProfile(data) {
+  return fetchWithAuth('/auth/me', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getSessions() {
+  return fetchWithAuth('/auth/sessions');
+}
+
+export async function revokeSession(sessionId) {
+  return fetchWithAuth(`/auth/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function revokeAllSessions() {
+  return fetchWithAuth('/auth/sessions', {
+    method: 'DELETE',
+  });
+}
+
+export async function adminGetUsers() {
+  return fetchWithAuth('/auth/admin/users');
+}
+
+export async function adminCreateUser(data) {
+  return fetchWithAuth('/auth/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminEditUser(userId, data) {
+  return fetchWithAuth(`/auth/admin/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function adminUnlockUser(userId) {
+  return fetchWithAuth(`/auth/admin/users/${userId}/unlock`, {
+    method: 'POST',
+  });
+}
+
+export async function adminGetAuditLogs() {
+  return fetchWithAuth('/auth/admin/audit-logs');
+}
+
 
