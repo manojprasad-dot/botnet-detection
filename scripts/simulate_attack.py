@@ -72,7 +72,6 @@ def dns_tunneling_attack() -> dict:
             "bytes_sent": random.randint(3000, 15000),
             "bytes_recv": random.randint(2000, 10000),
             "flow_duration": round(random.uniform(0.5, 3.0), 3),
-            "avg_packet_size": round(random.uniform(80, 250), 1),
             "tcp_flags": None,
             "dns_query": domain,
             "dns_entropy": round(random.uniform(4.2, 4.8), 4),
@@ -85,19 +84,17 @@ def dns_tunneling_attack() -> dict:
             "xgb_score": round(random.uniform(0.85, 0.97), 4),
             "is_anomaly": True,
             "threat_type": "DNS Abuse",
+            "features_used": {
+                "max_dns_entropy": 4.5,
+                "dns_query_count": 10.0,
+            }
         },
         "risk": {
             "risk_score": random.randint(78, 95),
             "severity": "critical",
-            "ml_score": round(random.uniform(0.85, 0.95), 3),
-            "ioc_score": round(random.uniform(0.7, 0.9), 3),
-            "behavior_score": round(random.uniform(0.6, 0.85), 3),
+            "recommendation": "Quarantine device immediately and run offline malware scan.",
         },
-        "behavior": {
-            "behavior_score": round(random.uniform(0.7, 0.9), 4),
-            "behavior_type": "dns_abuse",
-            "patterns_detected": ["dns_beaconing", "dga_domain"],
-        },
+        "collected_at": "2026-07-04T08:15:06Z"
     }
 
 
@@ -118,7 +115,6 @@ def c2_beaconing_attack() -> dict:
             "bytes_sent": random.randint(1000, 4000),
             "bytes_recv": random.randint(1000, 4000),
             "flow_duration": round(random.uniform(28.0, 32.0), 3),
-            "avg_packet_size": round(random.uniform(150, 300), 1),
             "tcp_flags": "S,A",
             "dns_query": None,
             "dns_entropy": 0.0,
@@ -131,19 +127,17 @@ def c2_beaconing_attack() -> dict:
             "xgb_score": round(random.uniform(0.88, 0.96), 4),
             "is_anomaly": True,
             "threat_type": "Beaconing",
+            "features_used": {
+                "beacon_interval_score": 0.9,
+                "connection_count": 5.0,
+            }
         },
         "risk": {
             "risk_score": random.randint(82, 96),
             "severity": "critical",
-            "ml_score": round(random.uniform(0.88, 0.96), 3),
-            "ioc_score": round(random.uniform(0.8, 0.95), 3),
-            "behavior_score": round(random.uniform(0.75, 0.9), 3),
+            "recommendation": "Block C2 destination IP and investigate endpoint registry.",
         },
-        "behavior": {
-            "behavior_score": round(random.uniform(0.8, 0.95), 4),
-            "behavior_type": "beaconing",
-            "patterns_detected": ["periodic_callback", "beaconing"],
-        },
+        "collected_at": "2026-07-04T08:16:30Z"
     }
 
 
@@ -163,7 +157,6 @@ def port_scan_attack() -> dict:
             "bytes_sent": random.randint(100, 300),
             "bytes_recv": random.randint(100, 300),
             "flow_duration": round(random.uniform(0.01, 0.5), 3),
-            "avg_packet_size": round(random.uniform(60, 120), 1),
             "tcp_flags": "S,R",
             "dns_query": None,
             "dns_entropy": 0.0,
@@ -176,19 +169,17 @@ def port_scan_attack() -> dict:
             "xgb_score": round(random.uniform(0.72, 0.85), 4),
             "is_anomaly": True,
             "threat_type": "Port Scan",
+            "features_used": {
+                "failed_connection_ratio": 0.8,
+                "tcp_flag_score": 0.5,
+            }
         },
         "risk": {
             "risk_score": random.randint(65, 80),
             "severity": "high",
-            "ml_score": round(random.uniform(0.72, 0.85), 3),
-            "ioc_score": 0.0,
-            "behavior_score": round(random.uniform(0.5, 0.7), 3),
+            "recommendation": "Block port scan source host and review internal network map.",
         },
-        "behavior": {
-            "behavior_score": round(random.uniform(0.5, 0.7), 4),
-            "behavior_type": "scanning",
-            "patterns_detected": ["port_scan"],
-        },
+        "collected_at": "2026-07-04T08:17:01Z"
     }
 
 
@@ -208,7 +199,6 @@ def data_exfiltration_attack() -> dict:
             "bytes_sent": random.randint(450000, 1800000),
             "bytes_recv": random.randint(10000, 50000),
             "flow_duration": round(random.uniform(30.0, 120.0), 3),
-            "avg_packet_size": round(random.uniform(800, 1400), 1),
             "tcp_flags": "S,A,P,F",
             "dns_query": None,
             "dns_entropy": 0.0,
@@ -221,19 +211,17 @@ def data_exfiltration_attack() -> dict:
             "xgb_score": round(random.uniform(0.80, 0.92), 4),
             "is_anomaly": True,
             "threat_type": "Command & Control",
+            "features_used": {
+                "bytes_sent": 1500000.0,
+                "outbound_frequency": 15.0,
+            }
         },
         "risk": {
             "risk_score": random.randint(75, 90),
             "severity": "high",
-            "ml_score": round(random.uniform(0.80, 0.92), 3),
-            "ioc_score": round(random.uniform(0.3, 0.6), 3),
-            "behavior_score": round(random.uniform(0.65, 0.85), 3),
+            "recommendation": "Quarantine exfiltration target and isolate host from internet.",
         },
-        "behavior": {
-            "behavior_score": round(random.uniform(0.65, 0.85), 4),
-            "behavior_type": "data_exfiltration",
-            "patterns_detected": ["data_exfiltration"],
-        },
+        "collected_at": "2026-07-04T08:20:00Z"
     }
 
 
@@ -258,15 +246,20 @@ def run_attack_sequence(base_url: str, token: str, rounds: int = 2, delay: float
     print(f"  Target: {base_url}")
     print(f"{'='*60}\n")
 
+    import uuid
+    from datetime import datetime, timezone
+    device_id = str(uuid.uuid4())
+
     for round_num in range(1, rounds + 1):
         print(f"--- Round {round_num}/{rounds} -----------------------------")
 
         for name, generator in ATTACK_SCENARIOS:
             event = generator()
+            event["collected_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             payload = {
-                "device_id": "sim-attacker-01",
+                "device_id": device_id,
                 "events": [event],
-                "generated_at": time.time(),
+                "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             }
 
             try:
