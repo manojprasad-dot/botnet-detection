@@ -48,6 +48,7 @@ class Alert(Base, UUIDMixin, TimestampMixin):
     )
     assigned_to: Mapped[None] = mapped_column(UUID(as_uuid=True), nullable=True)
     evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
 
     def __repr__(self) -> str:
         return f"<Alert {self.title} severity={self.severity.value} status={self.status.value}>"

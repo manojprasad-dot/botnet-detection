@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from scapy.layers.inet import IP, TCP, UDP
+from scapy.layers.inet6 import IPv6
 from scapy.layers.dns import DNS, DNSQR
 
 logger = logging.getLogger("kovirx.agent.capture.flow_engine")
@@ -65,12 +66,17 @@ class FlowEngine:
 
     def process_packet(self, pkt, local_ips: set[str]) -> None:
         """Process a sniffed packet and update flow tracking statistics."""
-        if IP not in pkt:
+        if IP in pkt:
+            ip_layer = pkt[IP]
+            src_ip = ip_layer.src
+            dest_ip = ip_layer.dst
+        elif IPv6 in pkt:
+            ip_layer = pkt[IPv6]
+            src_ip = ip_layer.src
+            dest_ip = ip_layer.dst
+        else:
             return
 
-        ip_layer = pkt[IP]
-        src_ip = ip_layer.src
-        dest_ip = ip_layer.dst
         protocol = "OTHER"
         src_port = None
         dest_port = None
@@ -235,6 +241,8 @@ class FlowEngine:
             "failed_connections": flow.failed_connections,
             "start_time": datetime.fromtimestamp(flow.start_time, tz=timezone.utc).isoformat(),
             "end_time": datetime.fromtimestamp(flow.last_seen, tz=timezone.utc).isoformat(),
+            "packet_sizes": flow.packet_sizes,
+            "packet_timestamps": flow.packet_timestamps,
         }
 
     @staticmethod

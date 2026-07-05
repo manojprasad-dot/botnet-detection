@@ -57,6 +57,18 @@ class BehaviorAnalysisService:
         exfil_patterns = await self._detect_exfiltration(since)
         patterns.extend(exfil_patterns)
 
+        # 4. Brute Force Detection
+        bf_patterns = await self._detect_brute_force(since)
+        patterns.extend(bf_patterns)
+
+        # 5. SMB Enumeration Detection
+        smb_patterns = await self._detect_smb_enumeration(since)
+        patterns.extend(smb_patterns)
+
+        # 6. Lateral Movement Detection
+        lm_patterns = await self._detect_lateral_movement(since)
+        patterns.extend(lm_patterns)
+
         return BehaviorAnalysisResponse(
             timeframe_hours=hours,
             total_patterns_detected=len(patterns),
@@ -65,6 +77,9 @@ class BehaviorAnalysisService:
                 "dns_abuse": len([p for p in patterns if "dns" in p.pattern_type.lower()]),
                 "scanning": len([p for p in patterns if "scan" in p.pattern_type.lower()]),
                 "exfiltration": len([p for p in patterns if "exfil" in p.pattern_type.lower()]),
+                "brute_force": len([p for p in patterns if "brute" in p.pattern_type.lower()]),
+                "smb_enumeration": len([p for p in patterns if "smb" in p.pattern_type.lower()]),
+                "lateral_movement": len([p for p in patterns if "lateral" in p.pattern_type.lower()]),
             },
         )
 
@@ -223,4 +238,103 @@ class BehaviorAnalysisService:
                     ))
         except Exception as e:
             logger.error("Exfiltration detection error: %s", e)
+        return patterns
+
+    async def _detect_brute_force(self, since: datetime) -> list[BehaviorPattern]:
+        """Detect SSH/RDP brute forcing (MITRE ATT&CK T1110)."""
+        patterns = []
+        try:
+            # Query for sources connecting to port 22 or 3389 with packet counts suggesting repeated retries
+            result = await self.db.execute(
+                select(
+                    NetworkFlow.source_ip,
+                    NetworkFlow.dest_port,
+                    func.count(NetworkFlow.id).label("attempts")
+                ).where(
+                    NetworkFlow.created_at >= since,
+                    NetworkFlow.dest_port.in_([22, 3389])
+                ).group_by(NetworkFlow.source_ip, NetworkFlow.dest_port)
+                .having(func.count(NetworkFlow.id) >= 10)
+            )
+            for row in result.all():
+                service = "SSH" if row.dest_port == 22 else "RDP"
+                patterns.append(BehaviorPattern(
+                    pattern_type="brute_force",
+                    confidence=min(0.95, row.attempts / 30.0),
+                    description=f"Device {row.source_ip}: {row.attempts} failed or repeated connection attempts to {service} [MITRE ATT&CK T1110]",
+                    affected_devices=1,
+                    evidence={
+                        "source_ip": row.source_ip,
+                        "port": row.dest_port,
+                        "service": service,
+                        "attempts": row.attempts,
+                        "mitre_id": "T1110"
+                    }
+                ))
+        except Exception as e:
+            logger.error("Brute force detection error: %s", e)
+        return patterns
+
+    async def _detect_smb_enumeration(self, since: datetime) -> list[BehaviorPattern]:
+        """Detect SMB Enumeration / Share scanning (MITRE ATT&CK T1046)."""
+        patterns = []
+        try:
+            # Query for sources scanning multiple destinations on SMB port 445
+            result = await self.db.execute(
+                select(
+                    NetworkFlow.source_ip,
+                    func.count(func.distinct(NetworkFlow.dest_ip)).label("target_count")
+                ).where(
+                    NetworkFlow.created_at >= since,
+                    NetworkFlow.dest_port == 445
+                ).group_by(NetworkFlow.source_ip)
+                .having(func.count(func.distinct(NetworkFlow.dest_ip)) >= 4)
+            )
+            for row in result.all():
+                patterns.append(BehaviorPattern(
+                    pattern_type="smb_enumeration",
+                    confidence=min(0.9, row.target_count / 10.0),
+                    description=f"Device {row.source_ip}: SMB share enumeration across {row.target_count} targets [MITRE ATT&CK T1046]",
+                    affected_devices=1,
+                    evidence={
+                        "source_ip": row.source_ip,
+                        "target_count": row.target_count,
+                        "port": 445,
+                        "mitre_id": "T1046"
+                    }
+                ))
+        except Exception as e:
+            logger.error("SMB enumeration detection error: %s", e)
+        return patterns
+
+    async def _detect_lateral_movement(self, since: datetime) -> list[BehaviorPattern]:
+        """Detect Lateral Movement scanning over internal ranges (MITRE ATT&CK T1021)."""
+        patterns = []
+        try:
+            # Look for devices scanning internal private IPs on remote administration ports
+            result = await self.db.execute(
+                select(
+                    NetworkFlow.source_ip,
+                    func.count(func.distinct(NetworkFlow.dest_ip)).label("internal_targets")
+                ).where(
+                    NetworkFlow.created_at >= since,
+                    NetworkFlow.dest_port.in_([22, 135, 139, 445, 3389, 5985, 5986]),
+                    NetworkFlow.dest_ip.like("192.168.%") | NetworkFlow.dest_ip.like("10.%") | NetworkFlow.dest_ip.like("172.16.%")
+                ).group_by(NetworkFlow.source_ip)
+                .having(func.count(func.distinct(NetworkFlow.dest_ip)) >= 3)
+            )
+            for row in result.all():
+                patterns.append(BehaviorPattern(
+                    pattern_type="lateral_movement",
+                    confidence=min(0.95, row.internal_targets / 8.0),
+                    description=f"Device {row.source_ip}: Scanning internal destinations on remote management ports. Target count: {row.internal_targets} [MITRE ATT&CK T1021]",
+                    affected_devices=1,
+                    evidence={
+                        "source_ip": row.source_ip,
+                        "target_count": row.internal_targets,
+                        "mitre_id": "T1021"
+                    }
+                ))
+        except Exception as e:
+            logger.error("Lateral movement detection error: %s", e)
         return patterns

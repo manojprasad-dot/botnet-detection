@@ -57,6 +57,7 @@ class Device(Base, UUIDMixin, TimestampMixin):
     registered_by: Mapped[None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
+    is_deleted: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
 
     def __repr__(self) -> str:
         return f"<Device {self.hostname} status={self.status.value}>"

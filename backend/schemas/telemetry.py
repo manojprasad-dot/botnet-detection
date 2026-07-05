@@ -50,6 +50,31 @@ class FlowTelemetryData(BaseModel):
     failed_connections: int = 0
     start_time: datetime
     end_time: datetime
+    # ── Enterprise EDR 24 new features ──
+    min_packet_size: float | None = 0.0
+    max_packet_size: float | None = 0.0
+    mean_packet_size: float | None = 0.0
+    std_packet_size: float | None = 0.0
+    variance_packet_size: float | None = 0.0
+    byte_rate: float | None = 0.0
+    direction_ratio: float | None = 0.0
+    tcp_flags_syn_count: float | None = 0.0
+    tcp_flags_ack_count: float | None = 0.0
+    tcp_flags_fin_count: float | None = 0.0
+    tcp_flags_rst_count: float | None = 0.0
+    tcp_flags_psh_count: float | None = 0.0
+    tls_sni_entropy: float | None = 0.0
+    http_methods_get_count: float | None = 0.0
+    http_methods_post_count: float | None = 0.0
+    port_diversity: float | None = 0.0
+    session_duration: float | None = 0.0
+    payload_entropy: float | None = 0.0
+    connection_frequency: float | None = 0.0
+    beacon_interval_variance: float | None = 0.0
+    burst_count: float | None = 0.0
+    ram_percent: float | None = 0.0
+    disk_percent: float | None = 0.0
+    unique_dest_count: float | None = 0.0
 
 
 class PredictionTelemetryData(BaseModel):

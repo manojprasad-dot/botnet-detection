@@ -49,6 +49,28 @@ def extract_feature_vector(batch: TelemetryBatch) -> dict[str, float]:
             values["packet_rate"] = max(
                 values["packet_rate"], float(event.payload.get("packet_rate", 0))
             )
+            # ── Enterprise EDR features ──
+            values["min_packet_size"] = max(values["min_packet_size"], float(event.payload.get("min_packet_size", 0.0)))
+            values["max_packet_size"] = max(values["max_packet_size"], float(event.payload.get("max_packet_size", 0.0)))
+            values["mean_packet_size"] = max(values["mean_packet_size"], float(event.payload.get("mean_packet_size", 0.0)))
+            values["std_packet_size"] = max(values["std_packet_size"], float(event.payload.get("std_packet_size", 0.0)))
+            values["variance_packet_size"] = max(values["variance_packet_size"], float(event.payload.get("variance_packet_size", 0.0)))
+            values["byte_rate"] = max(values["byte_rate"], float(event.payload.get("byte_rate", 0.0)))
+            values["direction_ratio"] = max(values["direction_ratio"], float(event.payload.get("direction_ratio", 0.0)))
+            values["tcp_flags_syn_count"] = max(values["tcp_flags_syn_count"], float(event.payload.get("tcp_flags_syn_count", 0.0)))
+            values["tcp_flags_ack_count"] = max(values["tcp_flags_ack_count"], float(event.payload.get("tcp_flags_ack_count", 0.0)))
+            values["tcp_flags_fin_count"] = max(values["tcp_flags_fin_count"], float(event.payload.get("tcp_flags_fin_count", 0.0)))
+            values["tcp_flags_rst_count"] = max(values["tcp_flags_rst_count"], float(event.payload.get("tcp_flags_rst_count", 0.0)))
+            values["tcp_flags_psh_count"] = max(values["tcp_flags_psh_count"], float(event.payload.get("tcp_flags_psh_count", 0.0)))
+            values["tls_sni_entropy"] = max(values["tls_sni_entropy"], float(event.payload.get("tls_sni_entropy", 0.0)))
+            values["http_methods_get_count"] = max(values["http_methods_get_count"], float(event.payload.get("http_methods_get_count", 0.0)))
+            values["http_methods_post_count"] = max(values["http_methods_post_count"], float(event.payload.get("http_methods_post_count", 0.0)))
+            values["port_diversity"] = max(values["port_diversity"], float(event.payload.get("port_diversity", 0.0)))
+            values["session_duration"] = max(values["session_duration"], float(event.payload.get("session_duration", 0.0)))
+            values["payload_entropy"] = max(values["payload_entropy"], float(event.payload.get("payload_entropy", 0.0)))
+            values["connection_frequency"] = max(values["connection_frequency"], float(event.payload.get("connection_frequency", 0.0)))
+            values["beacon_interval_variance"] = max(values["beacon_interval_variance"], float(event.payload.get("beacon_interval_variance", 0.0)))
+            values["burst_count"] = max(values["burst_count"], float(event.payload.get("burst_count", 0.0)))
 
         if event.event_type == "socket_snapshot":
             values["unique_remote_ips"] = max(
@@ -64,12 +86,18 @@ def extract_feature_vector(batch: TelemetryBatch) -> dict[str, float]:
                 values["top_remote_port_count"],
                 extract_top_remote_port_count(event),
             )
+            # EDR unique dest count
+            values["unique_dest_count"] = max(
+                values["unique_dest_count"], float(event.payload.get("unique_dest_count", 0.0))
+            )
 
         if event.event_type == "system_profile":
             values["cpu_percent"] = max(values["cpu_percent"], float(event.payload.get("cpu_percent", 0)))
             values["process_count"] = max(
                 values["process_count"], float(event.payload.get("process_count", 0))
             )
+            values["ram_percent"] = max(values["ram_percent"], float(event.payload.get("ram_percent", 0.0)))
+            values["disk_percent"] = max(values["disk_percent"], float(event.payload.get("disk_percent", 0.0)))
 
     values["network_event_count"] = float(network_events)
     if dns_entropies:

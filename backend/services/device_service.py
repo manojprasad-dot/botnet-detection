@@ -87,11 +87,11 @@ async def update_device(
 
 
 async def delete_device(db: AsyncSession, device_id: UUID) -> None:
-    """Delete a device by ID."""
-    device = await device_repository.remove(db, id=device_id)
-    if not device:
+    """Delete a device by ID (soft delete)."""
+    success = await device_repository.soft_delete(db, device_id)
+    if not success:
         raise NotFoundException("Device")
-    logger.info("Device deleted: %s", device_id)
+    logger.info("Device soft-deleted: %s", device_id)
 
 
 async def update_device_last_seen(db: AsyncSession, device_id: UUID) -> None:

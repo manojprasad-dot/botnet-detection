@@ -7,8 +7,12 @@ from database.repositories.base import BaseRepository
 
 
 class DeviceRepository(BaseRepository[Device]):
+    async def get(self, db: AsyncSession, id: UUID) -> Device | None:
+        result = await db.execute(select(Device).where(Device.id == id, Device.is_deleted == False))
+        return result.scalar_one_or_none()
+
     async def get_by_hostname(self, db: AsyncSession, hostname: str) -> Device | None:
-        result = await db.execute(select(Device).where(Device.hostname == hostname))
+        result = await db.execute(select(Device).where(Device.hostname == hostname, Device.is_deleted == False))
         return result.scalar_one_or_none()
 
     async def list_devices(
@@ -19,8 +23,8 @@ class DeviceRepository(BaseRepository[Device]):
         limit: int = 50,
         status: str | None = None,
     ) -> tuple[int, list[Device]]:
-        query = select(Device)
-        count_query = select(func.count(Device.id))
+        query = select(Device).where(Device.is_deleted == False)
+        count_query = select(func.count(Device.id)).where(Device.is_deleted == False)
 
         if status:
             query = query.where(Device.status == status)
@@ -34,6 +38,14 @@ class DeviceRepository(BaseRepository[Device]):
         )
         devices = list(result.scalars().all())
         return total, devices
+
+    async def soft_delete(self, db: AsyncSession, device_id: UUID) -> bool:
+        device = await db.get(Device, device_id)
+        if device:
+            device.is_deleted = True
+            await db.flush()
+            return True
+        return False
 
     async def update_last_seen(self, db: AsyncSession, device_id: UUID) -> Device | None:
         device = await db.get(Device, device_id)

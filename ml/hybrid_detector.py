@@ -41,6 +41,7 @@ class HybridThreatDetector:
             self.artifact_dir = Path(__file__).resolve().parents[2] / configured_dir
         self._artifacts_loaded = False
         self._xgboost_model: Any | None = None
+        self._random_forest_model: Any | None = None
         self._isolation_model: Any | None = None
         self._scaler: Any | None = None
         self._selector: Any | None = None
@@ -55,6 +56,7 @@ class HybridThreatDetector:
     def get_pipeline_status(self) -> dict[str, Any]:
         artifact_files = {
             "xgboost": self.artifact_dir / "xgboost_model.joblib",
+            "random_forest": self.artifact_dir / "random_forest_model.joblib",
             "isolation_forest": self.artifact_dir / "isolation_forest.joblib",
             "scaler": self.artifact_dir / "scaler.joblib",
             "selector": self.artifact_dir / "feature_selector.joblib",
@@ -68,7 +70,7 @@ class HybridThreatDetector:
             "artifact_dir": str(self.artifact_dir),
             "available_artifacts": available,
             "pipeline_layers": MODEL_LAYERS,
-            "primary_model": "XGBoost",
+            "primary_model": "Ensemble Voting Classifier (XGBoost + Random Forest)",
             "anomaly_model": "Isolation Forest",
             "explainability": "SHAP-ready training pipeline; runtime fallback uses feature attribution rules",
         }
@@ -84,6 +86,8 @@ class HybridThreatDetector:
             "scaler": self.artifact_dir / "scaler.joblib",
             "selector": self.artifact_dir / "feature_selector.joblib",
         }
+        rf_path = self.artifact_dir / "random_forest_model.joblib"
+
         if not all(path.exists() for path in required_paths.values()):
             return False
 
@@ -94,28 +98,49 @@ class HybridThreatDetector:
             self._isolation_model = joblib.load(required_paths["isolation"])
             self._scaler = joblib.load(required_paths["scaler"])
             self._selector = joblib.load(required_paths["selector"])
+            if rf_path.exists():
+                self._random_forest_model = joblib.load(rf_path)
         except Exception:
             self._xgboost_model = None
             self._isolation_model = None
             self._scaler = None
             self._selector = None
+            self._random_forest_model = None
             return False
 
         return True
 
     def _predict_with_artifacts(self, features: dict[str, float]) -> HybridPrediction:
-        ordered = [feature_vector_to_ordered_list(features)]
+        from ml.feature_schema import FEATURE_NAMES
+        n_features = self._scaler.n_features_in_ if hasattr(self._scaler, "n_features_in_") else 22
+        ordered = [[float(features.get(name, 0.0)) for name in FEATURE_NAMES[:n_features]]]
         transformed = self._scaler.transform(ordered)
         selected = self._selector.transform(transformed)
 
         xgb_probability = float(self._xgboost_model.predict_proba(selected)[0][1])
+        
+        # Calculate Random Forest probability if available, otherwise fallback to XGBoost
+        if self._random_forest_model is not None:
+            rf_probability = float(self._random_forest_model.predict_proba(selected)[0][1])
+        else:
+            rf_probability = xgb_probability
+
         anomaly_label = int(self._isolation_model.predict(selected)[0])
-        anomaly_score = 0.74 if anomaly_label == -1 else 0.18
-        risk_score = int(min(100, (xgb_probability * 72) + (anomaly_score * 28)))
+        anomaly_score = 0.85 if anomaly_label == -1 else 0.15
+
+        # Voting Classifier aggregated risk score
+        # 40% XGBoost, 30% Random Forest, 30% Isolation Forest
+        risk_score = int(min(100, ((xgb_probability * 0.4) + (rf_probability * 0.3) + (anomaly_score * 0.3)) * 100))
         severity = severity_from_risk(risk_score)
         label = "botnet" if risk_score >= 55 else "benign"
 
         signals = [
+            ModelSignal(
+                layer="Random Forest fast screen",
+                score=rf_probability,
+                label="botnet" if rf_probability >= 0.5 else "benign",
+                explanation="Fast tree classifier screening for malicious network patterns.",
+            ),
             ModelSignal(
                 layer="XGBoost known-threat classifier",
                 score=xgb_probability,
@@ -133,7 +158,7 @@ class HybridThreatDetector:
         return HybridPrediction(
             label=label,
             severity=severity,
-            confidence_score=min(0.99, max(xgb_probability, anomaly_score)),
+            confidence_score=min(0.99, max(xgb_probability, rf_probability, anomaly_score)),
             risk_score=risk_score,
             model_mode="trained-artifacts",
             signals=signals,
