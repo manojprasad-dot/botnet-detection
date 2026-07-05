@@ -270,6 +270,19 @@ export async function getSystemLogs(level = null, module = null, skip = 0, limit
 /**
  * Get audit logs.
  */
+// ── Telemetry APIs ──────────────────────────────────────────────
+
+/**
+ * Ingest telemetry payloads directly.
+ */
+export async function ingestTelemetry(payload) {
+  return fetchWithAuth('/telemetry/ingest', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+
 export async function getAuditLogs(userId = null, action = null, skip = 0, limit = 50) {
   let query = `?skip=${skip}&limit=${limit}`;
   if (userId) query += `&user_id=${userId}`;

@@ -15,7 +15,8 @@ import {
   getReports,
   downloadReport,
   getSystemLogs,
-  getAuditLogs
+  getAuditLogs,
+  ingestTelemetry
 } from "../services/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -489,6 +490,131 @@ export default function KovirXDashboard() {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, []);
+
+  const handleRunMalwareAttack = async () => {
+    setReplaying(true);
+
+    const deviceId = "cf5349e5-066e-4d32-b4aa-c841738846e0";
+    const scenarios = [
+      {
+        flow: {
+          source_ip: "192.168.1.105",
+          dest_ip: "185.220.101.42",
+          protocol: "UDP",
+          packet_count: 120,
+          byte_count: 15000,
+          flow_duration: 1.5,
+          start_time: new Date().toISOString(),
+          end_time: new Date().toISOString(),
+          dns_query: "x7k9m2p4q8r1.evil-botnet.xyz",
+          dns_entropy: 4.6
+        },
+        prediction: {
+          xgb_score: 0.98,
+          is_anomaly: true,
+          threat_type: "DNS Abuse",
+          features_used: { max_dns_entropy: 4.6, dns_query_count: 10.0 }
+        },
+        risk: {
+          risk_score: 85,
+          severity: "critical",
+          recommendation: "Quarantine device immediately and run offline malware scan."
+        }
+      },
+      {
+        flow: {
+          source_ip: "192.168.1.42",
+          dest_ip: "45.33.32.156",
+          protocol: "TCP",
+          packet_count: 35,
+          byte_count: 6000,
+          flow_duration: 30.0,
+          start_time: new Date().toISOString(),
+          end_time: new Date().toISOString(),
+          beacon_interval: 0.005
+        },
+        prediction: {
+          xgb_score: 0.99,
+          is_anomaly: true,
+          threat_type: "Beaconing",
+          features_used: { beacon_interval_score: 0.9, connection_count: 5.0 }
+        },
+        risk: {
+          risk_score: 96,
+          severity: "critical",
+          recommendation: "Block C2 destination IP and investigate endpoint registry."
+        }
+      },
+      {
+        flow: {
+          source_ip: "192.168.1.200",
+          dest_ip: "10.0.0.50",
+          protocol: "TCP",
+          packet_count: 6,
+          byte_count: 400,
+          flow_duration: 0.2,
+          start_time: new Date().toISOString(),
+          end_time: new Date().toISOString(),
+          failed_connections: 5
+        },
+        prediction: {
+          xgb_score: 0.88,
+          is_anomaly: true,
+          threat_type: "Port Scan",
+          features_used: { failed_connection_ratio: 0.8, tcp_flag_score: 0.5 }
+        },
+        risk: {
+          risk_score: 75,
+          severity: "high",
+          recommendation: "Block port scan source host and review internal network map."
+        }
+      },
+      {
+        flow: {
+          source_ip: "192.168.1.77",
+          dest_ip: "104.21.45.12",
+          protocol: "TCP",
+          packet_count: 1200,
+          byte_count: 1200000,
+          flow_duration: 60.0,
+          start_time: new Date().toISOString(),
+          end_time: new Date().toISOString()
+        },
+        prediction: {
+          xgb_score: 0.92,
+          is_anomaly: true,
+          threat_type: "Command & Control",
+          features_used: { bytes_sent: 1000000.0, outbound_frequency: 10.0 }
+        },
+        risk: {
+          risk_score: 90,
+          severity: "high",
+          recommendation: "Quarantine exfiltration target and isolate host from internet."
+        }
+      }
+    ];
+
+    scenarios.forEach((scenario, idx) => {
+      setTimeout(async () => {
+        try {
+          const payload = {
+            device_id: deviceId,
+            events: [
+              {
+                ...scenario,
+                collected_at: new Date().toISOString()
+              }
+            ],
+            generated_at: new Date().toISOString()
+          };
+          await ingestTelemetry(payload);
+          console.log(`Ingested scenario ${idx + 1}`);
+        } catch (err) {
+          console.error("Failed to ingest scenario:", err);
+        }
+      }, idx * 1100);
+    });
+  };
 
   // MITRE Replay Simulation Effect
   useEffect(() => {
@@ -1016,7 +1142,7 @@ export default function KovirXDashboard() {
                       </div>
 
                       <button
-                        onClick={() => setReplaying(true)}
+                        onClick={handleRunMalwareAttack}
                         disabled={replaying}
                         className={`w-full py-2.5 rounded-lg border font-orbitron text-[9px] font-bold tracking-[2px] transition-all duration-200 flex items-center justify-center gap-2 ${
                           replaying
