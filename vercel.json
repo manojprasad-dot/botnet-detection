@@ -15,7 +15,7 @@
     },
     {
       "source": "/((?!api/|health|ws/).*)",
-      "destination": "/frontend/index.html"
+      "destination": "/index.html"
     }
   ]
 }

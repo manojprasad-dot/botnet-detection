@@ -61,8 +61,16 @@ async def lifespan(app: FastAPI):
                 logger.info("Initial super-admin seeded successfully.")
             else:
                 logger.info("Database users exist. Skipping super-admin seeding.")
+                # Sync admin@kovirx.com password to KovirX@2024! on remote startup
+                result_admin = await session.execute(select(User).where(User.email == "admin@kovirx.com"))
+                admin_user = result_admin.scalar_one_or_none()
+                if admin_user:
+                    from backend.core.security import hash_password
+                    admin_user.hashed_password = hash_password("KovirX@2024!")
+                    await session.commit()
+                    logger.info("Admin password successfully synchronized on startup.")
     except Exception as e:
-        logger.warning("Could not check/seed super-admin user on startup (db may not be ready): %s", e)
+        logger.warning("Could not check/seed/sync super-admin user on startup: %s", e)
 
     yield
 
