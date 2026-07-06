@@ -1,0 +1,11 @@
+{
+  "name": "kovirx-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build -w frontend && cp -r frontend/dist dist"
+  }
+}
