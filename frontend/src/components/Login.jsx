@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { login } from '../services/api';
 import logoImg from '../assets/logo.jpg';
@@ -153,6 +154,17 @@ export default function Login() {
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
+            </div>
+            <div className="flex justify-between items-center mt-2.5 px-0.5">
+              <span className="text-[8px] text-[#5A7090] font-orbitron tracking-wider">
+                5 FAILED ATTEMPTS LOCKS ACCOUNT
+              </span>
+              <Link
+                to="/forgot-password"
+                className="text-[9px] text-cyan hover:text-white font-orbitron tracking-wider transition-colors font-semibold"
+              >
+                FORGOT PASSWORD?
+              </Link>
             </div>
           </div>
 
