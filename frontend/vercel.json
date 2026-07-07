@@ -2,19 +2,7 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://captivating-inspiration-production-730c.up.railway.app/api/:path*"
-    },
-    {
-      "source": "/health",
-      "destination": "https://captivating-inspiration-production-730c.up.railway.app/health"
-    },
-    {
-      "source": "/ws/:path*",
-      "destination": "https://captivating-inspiration-production-730c.up.railway.app/ws/:path*"
-    },
-    {
-      "source": "/:path*",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]

@@ -28,17 +28,17 @@ export const getToken = () => {
 };
 
 export const getRefreshToken = () => {
-  return localStorage.getItem('kovirx_refresh_token');
+  return localStorage.getItem('refresh_token');
 };
 
 export const setTokens = (accessToken, refreshToken) => {
   localStorage.setItem('kovirx_access_token', accessToken);
-  localStorage.setItem('kovirx_refresh_token', refreshToken);
+  localStorage.setItem('refresh_token', refreshToken);
 };
 
 export const logout = () => {
   localStorage.removeItem('kovirx_access_token');
-  localStorage.removeItem('kovirx_refresh_token');
+  localStorage.removeItem('refresh_token');
   window.dispatchEvent(new Event('auth_change'));
 };
 
