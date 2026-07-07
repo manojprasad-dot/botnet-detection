@@ -102,8 +102,6 @@ export default function ResetPassword() {
               id="new-pass"
               label="NEW SECURITY PASSWORD"
               value={newPassword}
-              onChange={(e) => setNewPassword(e.value)} // Wait, PasswordInput uses FloatingInput, whose onChange passes the event or we bind target.value in input. But PasswordInput wraps FloatingInput. Wait, let's verify FloatingInput onChange usage!
-              // In FloatingInput: onChange={onChange} where input has onChange={onChange}. So the event object is passed, meaning we should use (e) => setNewPassword(e.target.value). Yes!
               onChange={(e) => setNewPassword(e.target.value)}
               required
               disabled={loading}
