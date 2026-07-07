@@ -1,7 +1,12 @@
 import React, { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { RefreshCw, ShieldAlert, KeyRound, CheckCircle2 } from "lucide-react";
+import { motion } from "framer-motion";
 import logoImg from "../assets/logo.jpg";
 import { resetPassword } from "../services/api";
+import FloatingInput from "../components/FloatingInput";
+import PasswordInput from "../components/PasswordInput";
+import AnimatedBackground from "../components/AnimatedBackground";
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -52,104 +57,119 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-[#060B18] text-[#C5D0E6] flex flex-col justify-center items-center p-4">
-      <div className="w-full max-w-md bg-[#0C1426] border border-[#1E293B] rounded-xl p-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-[#00D4FF]" />
+    <div className="relative w-screen h-screen bg-[#030712] flex items-center justify-center p-4 overflow-hidden select-none">
+      <AnimatedBackground />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-[420px] px-8 py-10 rounded-2xl glass-panel relative z-10 flex flex-col items-center shadow-2xl"
+      >
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 via-cyan-400 to-cyan-500" />
 
         <div className="flex flex-col items-center mb-6">
-          <img src={logoImg} alt="Kovirx" className="h-12 w-12 object-contain mb-3" />
+          <img src={logoImg} alt="Kovirx" className="h-12 w-12 object-contain mb-3 filter drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
           <h2 className="font-orbitron font-black text-lg tracking-[2px] text-white">RESET EDR PASSWORD</h2>
-          <span className="font-orbitron text-[8px] tracking-[1.5px] text-[#5A7090] mt-1">SECURE CREATION DESK</span>
+          <span className="font-orbitron text-[8px] tracking-[1.5px] text-slate-500 mt-1 uppercase">SECURE CREATION DESK</span>
         </div>
 
         {message && (
-          <div className="p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 mb-4 text-center">
-            {message}
-            <div className="mt-2">
-              <Link to="/login" className="text-xs font-bold text-white underline">LOG IN NOW</Link>
+          <div className="w-full p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-center">
+            <div className="flex items-center justify-center gap-2 text-emerald-400 text-xs font-semibold mb-3">
+              <CheckCircle2 className="h-5 w-5" />
+              <span>{message}</span>
             </div>
+            <Link
+              to="/login"
+              className="inline-block py-2 px-4 rounded bg-cyan-500 text-black font-orbitron font-bold text-[9px] tracking-wider hover:bg-cyan-400 transition-colors"
+            >
+              LOG IN NOW
+            </Link>
           </div>
         )}
 
         {error && (
-          <div className="p-3 bg-rose-950/20 border border-rose-500/30 rounded-lg text-xs text-rose-400 mb-4 text-center">
-            {error}
+          <div className="w-full p-3.5 bg-red-950/20 border border-red-500/30 rounded-lg text-[11px] text-red-400 mb-6 text-center font-sans flex items-center gap-2">
+            <ShieldAlert className="h-4.5 w-4.5 text-red-500 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
         {!message && (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="text-[10px] font-bold text-[#5A7090] font-orbitron block mb-1">NEW PASSWORD</label>
-              <input
-                type="password"
-                required
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full bg-[#060B18] border border-[#1E293B] rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
-                placeholder="Minimum 12 characters..."
-              />
-            </div>
+          <form onSubmit={handleSubmit} className="w-full space-y-6">
+            <PasswordInput
+              id="new-pass"
+              label="NEW SECURITY PASSWORD"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.value)} // Wait, PasswordInput uses FloatingInput, whose onChange passes the event or we bind target.value in input. But PasswordInput wraps FloatingInput. Wait, let's verify FloatingInput onChange usage!
+              // In FloatingInput: onChange={onChange} where input has onChange={onChange}. So the event object is passed, meaning we should use (e) => setNewPassword(e.target.value). Yes!
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              disabled={loading}
+            />
 
-            {/* Password strength indicator */}
+            {/* Password strength profile */}
             {newPassword && (
-              <div className="space-y-1">
-                <div className="flex justify-between text-[9px] text-[#5A7090] font-orbitron font-bold">
+              <div className="space-y-2">
+                <div className="flex justify-between text-[9px] text-slate-500 font-orbitron font-bold tracking-wider">
                   <span>STRENGTH PROFILE:</span>
-                  <span style={{ color: strengthScore === 5 ? "#00E676" : "#FFB400" }}>
+                  <span className={strengthScore === 5 ? "text-emerald-400" : "text-amber-400"}>
                     {strengthScore === 5 ? "COMPLIANT" : "WEAK"}
                   </span>
                 </div>
-                <div className="h-1 bg-[#1E293B] rounded-full overflow-hidden flex gap-0.5">
+                <div className="h-1 bg-gray-900 rounded-full overflow-hidden flex gap-0.5">
                   {Array.from({ length: 5 }).map((_, idx) => (
                     <div
                       key={idx}
                       className={`h-full flex-1 transition-all duration-300 ${
                         strengthScore > idx
                           ? strengthScore === 5
-                            ? "bg-[#00E676]"
-                            : "bg-[#FFB400]"
-                          : "bg-[#1E293B]"
+                            ? "bg-emerald-400 shadow-[0_0_6px_#10B981]"
+                            : "bg-amber-400 shadow-[0_0_6px_#F59E0B]"
+                          : "bg-slate-800"
                       }`}
                     />
                   ))}
                 </div>
-                <p className="text-[8px] text-[#5A7090] leading-relaxed">
+                <p className="text-[8px] text-slate-500 leading-normal font-sans">
                   Requires 12+ chars, uppercase, lowercase, numbers, and special symbols.
                 </p>
               </div>
             )}
 
-            <div>
-              <label className="text-[10px] font-bold text-[#5A7090] font-orbitron block mb-1">CONFIRM NEW PASSWORD</label>
-              <input
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full bg-[#060B18] border border-[#1E293B] rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
-                placeholder="Verify new password..."
-              />
-            </div>
+            <PasswordInput
+              id="confirm-pass"
+              label="CONFIRM SECURITY PASSWORD"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              disabled={loading}
+            />
 
             <button
               type="submit"
               disabled={loading}
-              className={`w-full py-2.5 rounded-lg bg-[#00D4FF] hover:bg-[#00D4FF]/80 text-black font-orbitron text-xs font-bold tracking-wider transition-all shadow-lg shadow-cyan-500/10 cursor-pointer ${
-                loading ? "opacity-50 cursor-not-allowed" : ""
+              className={`w-full py-3.5 rounded-lg text-white font-orbitron text-[10px] font-bold tracking-[3px] shadow-lg transition-all duration-300 relative overflow-hidden flex items-center justify-center cursor-pointer ${
+                loading
+                  ? "bg-slate-800 text-slate-500 shadow-none border border-slate-700/50"
+                  : "bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 hover:shadow-cyan-500/20 hover:brightness-110 shadow-blue-500/10"
               }`}
             >
-              {loading ? "SAVING..." : "UPDATE CREDENTIALS"}
+              {loading && (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin absolute left-4 text-cyan-400" />
+              )}
+              <span>{loading ? "SAVING..." : "UPDATE CREDENTIALS"}</span>
             </button>
           </form>
         )}
 
-        <div className="text-center mt-6">
-          <Link to="/login" className="text-xs text-[#5A7090] hover:text-white transition-colors font-orbitron">
+        <div className="text-center mt-8">
+          <Link to="/login" className="text-[10px] text-slate-500 hover:text-cyan-400 transition-colors font-orbitron font-semibold tracking-wider">
             BACK TO LOGIN
           </Link>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -1,7 +1,11 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { Mail, RefreshCw, Key, ShieldAlert } from "lucide-react";
+import { motion } from "framer-motion";
 import logoImg from "../assets/logo.jpg";
 import { forgotPassword } from "../services/api";
+import FloatingInput from "../components/FloatingInput";
+import AnimatedBackground from "../components/AnimatedBackground";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -26,58 +30,70 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-[#060B18] text-[#C5D0E6] flex flex-col justify-center items-center p-4">
-      <div className="w-full max-w-md bg-[#0C1426] border border-[#1E293B] rounded-xl p-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-[#9B59FF]" />
-        
+    <div className="relative w-screen h-screen bg-[#030712] flex items-center justify-center p-4 overflow-hidden select-none">
+      <AnimatedBackground />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-[420px] px-8 py-10 rounded-2xl glass-panel relative z-10 flex flex-col items-center shadow-2xl"
+      >
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 via-cyan-400 to-cyan-500" />
+
         <div className="flex flex-col items-center mb-6">
-          <img src={logoImg} alt="Kovirx" className="h-12 w-12 object-contain filter drop-shadow-[0_0_8px_rgba(155,89,255,0.4)] mb-3" />
+          <img src={logoImg} alt="Kovirx" className="h-12 w-12 object-contain filter drop-shadow-[0_0_8px_rgba(6,182,212,0.4)] mb-3" />
           <h2 className="font-orbitron font-black text-lg tracking-[2px] text-white">RECOVER CREDENTIALS</h2>
-          <span className="font-orbitron text-[8px] tracking-[1.5px] text-[#5A7090] mt-1">EDR SECURITY DOMAIN</span>
+          <span className="font-orbitron text-[8px] tracking-[1.5px] text-slate-500 mt-1 uppercase">EDR SECURITY DOMAIN</span>
         </div>
 
         {message && (
-          <div className="p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 mb-4 text-center">
+          <div className="w-full p-3.5 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-[11px] text-emerald-400 mb-6 text-center font-sans">
             {message}
           </div>
         )}
 
         {error && (
-          <div className="p-3 bg-rose-950/20 border border-rose-500/30 rounded-lg text-xs text-rose-400 mb-4 text-center">
-            {error}
+          <div className="w-full p-3.5 bg-red-950/20 border border-red-500/30 rounded-lg text-[11px] text-red-400 mb-6 text-center font-sans flex items-center gap-2">
+            <ShieldAlert className="h-4.5 w-4.5 text-red-500 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-[10px] font-bold text-[#5A7090] font-orbitron block mb-1">EMAIL ADDRESS</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-[#060B18] border border-[#1E293B] rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-[#5A7090] focus:outline-none focus:border-[#9B59FF] transition-all"
-              placeholder="e.g. operator@kovirx.com"
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="w-full space-y-6">
+          <FloatingInput
+            id="forgot-email"
+            type="email"
+            label="ENTER REGISTERED EMAIL"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={loading}
+            icon={Mail}
+          />
 
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-2.5 rounded-lg bg-[#9B59FF] hover:bg-[#9B59FF]/80 text-white font-orbitron text-xs font-bold tracking-wider transition-all shadow-lg shadow-purple-500/10 cursor-pointer ${
-              loading ? "opacity-50 cursor-not-allowed" : ""
+            className={`w-full py-3.5 rounded-lg text-white font-orbitron text-[10px] font-bold tracking-[3px] shadow-lg transition-all duration-300 relative overflow-hidden flex items-center justify-center cursor-pointer ${
+              loading
+                ? "bg-slate-800 text-slate-500 shadow-none border border-slate-700/50"
+                : "bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 hover:shadow-cyan-500/20 hover:brightness-110 shadow-blue-500/10"
             }`}
           >
-            {loading ? "PROCESSING..." : "REQUEST RESET LINK"}
+            {loading && (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin absolute left-4 text-cyan-400" />
+            )}
+            <span>{loading ? "PROCESSING..." : "REQUEST RESET LINK"}</span>
           </button>
         </form>
 
-        <div className="text-center mt-6">
-          <Link to="/login" className="text-xs text-[#5A7090] hover:text-[#9B59FF] transition-colors font-orbitron">
+        <div className="text-center mt-8">
+          <Link to="/login" className="text-[10px] text-slate-500 hover:text-cyan-400 transition-colors font-orbitron font-semibold tracking-wider">
             RETURN TO SIGN IN
           </Link>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

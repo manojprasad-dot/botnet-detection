@@ -10,7 +10,7 @@ import Profile from "./pages/Profile";
 import SecuritySettings from "./pages/SecuritySettings";
 import ActiveSessions from "./pages/ActiveSessions";
 import UserManagement from "./pages/UserManagement";
-import Login from "./components/Login";
+import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import { isAuthenticated } from "./services/api";
