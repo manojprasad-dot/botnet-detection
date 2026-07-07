@@ -140,7 +140,7 @@ export default function AppLayout() {
               <img
                 src={logoImg}
                 alt="KovirX Logo"
-                className="h-10 w-10 object-contain filter drop-shadow-[0_0_8px_rgba(0,212,255,0.5)]"
+                className="h-10 w-10 object-contain filter drop-shadow-[0_0_8px_rgba(0,212,255,0.5)] logo-blend"
               />
             </div>
             <div className="flex flex-col">

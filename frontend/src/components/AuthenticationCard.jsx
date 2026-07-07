@@ -79,7 +79,7 @@ export default function AuthenticationCard({ onSuccess }) {
         <img
           src={logoImg}
           alt="Kovirx"
-          className="h-14 w-14 object-contain filter drop-shadow-[0_0_10px_rgba(6,182,212,0.4)]"
+          className="h-14 w-14 object-contain filter drop-shadow-[0_0_10px_rgba(6,182,212,0.4)] logo-blend"
         />
       </div>
 

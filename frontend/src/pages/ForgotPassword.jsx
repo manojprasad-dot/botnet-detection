@@ -42,7 +42,7 @@ export default function ForgotPassword() {
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 via-cyan-400 to-cyan-500" />
 
         <div className="flex flex-col items-center mb-6">
-          <img src={logoImg} alt="Kovirx" className="h-12 w-12 object-contain filter drop-shadow-[0_0_8px_rgba(6,182,212,0.4)] mb-3" />
+          <img src={logoImg} alt="Kovirx" className="h-12 w-12 object-contain filter drop-shadow-[0_0_8px_rgba(6,182,212,0.4)] mb-3 logo-blend" />
           <h2 className="font-orbitron font-black text-lg tracking-[2px] text-white">RECOVER CREDENTIALS</h2>
           <span className="font-orbitron text-[8px] tracking-[1.5px] text-slate-500 mt-1 uppercase">EDR SECURITY DOMAIN</span>
         </div>
