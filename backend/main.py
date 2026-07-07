@@ -60,15 +60,23 @@ async def lifespan(app: FastAPI):
                 await seed_superadmin(session, settings.first_superadmin_email, settings.first_superadmin_password)
                 logger.info("Initial super-admin seeded successfully.")
             else:
-                logger.info("Database users exist. Skipping super-admin seeding.")
-                # Sync admin@kovirx.com password to KovirX@2024! on remote startup
+                logger.info("Database users exist. Checking admin presence...")
+                # Sync or Seed admin@kovirx.com to ensure existence with correct password
                 result_admin = await session.execute(select(User).where(User.email == "admin@kovirx.com"))
                 admin_user = result_admin.scalar_one_or_none()
                 if admin_user:
                     from backend.core.security import hash_password
                     admin_user.hashed_password = hash_password("KovirX@2024!")
+                    admin_user.is_active = True
+                    admin_user.is_verified = True
+                    admin_user.role = "super_admin"
                     await session.commit()
-                    logger.info("Admin password successfully synchronized on startup.")
+                    logger.info("Admin user verified and password synchronized.")
+                else:
+                    logger.info("Admin user not found. Seeding admin user...")
+                    from backend.services.auth_service import seed_superadmin
+                    await seed_superadmin(session, "admin@kovirx.com", "KovirX@2024!")
+                    logger.info("Admin user seeded successfully.")
     except Exception as e:
         logger.warning("Could not check/seed/sync super-admin user on startup: %s", e)
 
